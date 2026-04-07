@@ -1,6 +1,6 @@
 # 🌐 ArgenCash Ledger API 
 
-![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?style=for-the-badge&logo=dotnet)
+![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?style=for-the-badge&logo=dotnet)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql)
 ![Architecture](https://img.shields.io/badge/Architecture-Clean-success?style=for-the-badge)
 
@@ -15,21 +15,21 @@ ArgenCash solves this by implementing a **Forex-Aware Double-Entry Ledger**. It 
 * **Multi-Rate Triangulation:** Supports concurrent exchange rates for a single currency pair (e.g., Official, Blue, and MEP rates).
 * **Snapshot Pattern:** Transactions are immutable. Historical ARS expenses retain their exact USD value from the day they were executed, preventing historical data mutation.
 * **Financial Precision:** 100% eradication of floating-point truncation errors by utilizing `numeric(19,4)` and the Money Pattern across the entire stack.
-* **Idempotency:** Core transaction endpoints utilize Idempotency Keys to safely handle network drops and prevent double-charging from frontend retries.
-* **Automated Data Sync:** Implements background workers to fetch market rates periodically without blocking the main transaction threads.
+* **Idempotency:** Planned for transaction endpoints to safely handle retries without double-charging.
+* **Automated Data Sync:** Planned as a background worker for future market-rate synchronization.
 
 ## 🏗️ Architecture
 This API is built using **Clean Architecture** (Domain-Driven Design principles) to enforce a strict separation of concerns, ensuring the financial domain logic is entirely isolated from web frameworks and database providers.
 
 * **Presentation:** ASP.NET Core Web API
-* **Application:** CQRS pattern, FluentValidation
-* **Domain:** Rich enterprise entities, Custom Exceptions
-* **Infrastructure:** Entity Framework Core, PostgreSQL, external API integrations (DolarApi)
+* **Application:** Use-case services, DTOs, repository contracts, dependency registration
+* **Domain:** Rich entities with factory-method validation and no infrastructure dependencies
+* **Infrastructure:** Entity Framework Core, PostgreSQL, persistence implementations, dependency registration
 
 ## 🛠️ Getting Started
 
 ### Prerequisites
-* .NET 8 SDK or later
+* .NET 10 SDK or later
 * PostgreSQL 15+
 * Docker (Optional, for database containerization)
 
