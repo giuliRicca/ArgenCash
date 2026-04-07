@@ -1,6 +1,6 @@
 # 🌐 ArgenCash Ledger API 
 
-![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?style=for-the-badge&logo=dotnet)
+![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?style=for-the-badge&logo=dotnet)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql)
 ![Architecture](https://img.shields.io/badge/Architecture-Clean-success?style=for-the-badge)
 
