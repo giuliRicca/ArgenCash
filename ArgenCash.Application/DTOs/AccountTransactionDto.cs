@@ -10,4 +10,6 @@ public class AccountTransactionDto
     public decimal ConvertedAmountUsd { get; init; }
     public decimal ConvertedAmountArs { get; init; }
     public DateTime TransactionDate { get; init; }
+    public Guid? CategoryId { get; init; }
+    public string? CategoryName { get; init; }
 }

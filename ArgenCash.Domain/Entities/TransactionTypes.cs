@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace ArgenCash.Domain.Entities;
 
 public static class TransactionTypes
@@ -19,6 +21,26 @@ public static class TransactionTypes
             Income => Income,
             Expense => Expense,
             _ => throw new ArgumentException("Transaction type must be INCOME or EXPENSE.", parameterName)
+        };
+    }
+
+    public static TransactionType ToEnum(string transactionType)
+    {
+        return transactionType.ToUpperInvariant() switch
+        {
+            Income => TransactionType.Income,
+            Expense => TransactionType.Expense,
+            _ => throw new ArgumentException($"Invalid transaction type: {transactionType}")
+        };
+    }
+
+    public static string ToString(TransactionType transactionType)
+    {
+        return transactionType switch
+        {
+            TransactionType.Income => Income,
+            TransactionType.Expense => Expense,
+            _ => throw new ArgumentException($"Invalid transaction type enum: {transactionType}")
         };
     }
 }

@@ -7,10 +7,12 @@ namespace ArgenCash.Application.Services;
 public class AccountService : IAccountService
 {
     private readonly IAccountRepository _accountRepository;
+    private readonly ILiveExchangeRateProvider _exchangeRateProvider;
 
-    public AccountService(IAccountRepository accountRepository)
+    public AccountService(IAccountRepository accountRepository, ILiveExchangeRateProvider exchangeRateProvider)
     {
         _accountRepository = accountRepository;
+        _exchangeRateProvider = exchangeRateProvider;
     }
 
     public async Task<Guid> CreateAccountAsync(Guid userId, CreateAccountRequest request)
@@ -23,6 +25,59 @@ public class AccountService : IAccountService
         await _accountRepository.SaveChangesAsync();
 
         return account.Id;
+    }
+
+    public async Task<Guid> CreateTransactionAsync(Guid userId, CreateTransactionRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var account = await _accountRepository.GetByIdAsync(request.AccountId, userId);
+        if (account is null)
+        {
+            throw new ArgumentException("Account not found.", nameof(request.AccountId));
+        }
+
+        var liveRate = await _exchangeRateProvider.GetLiveRateAsync("USD", "ARS", cancellationToken);
+        var convertedAmountUSD = request.Currency == "USD"
+            ? request.Amount
+            : request.Amount / liveRate.SellRate;
+        var convertedAmountARS = request.Currency == "ARS"
+            ? request.Amount
+            : request.Amount * liveRate.BuyRate;
+
+        var transactionType = TransactionTypes.ToEnum(request.TransactionType);
+
+        var transaction = Transaction.Create(
+            request.AccountId,
+            request.Amount,
+            request.Currency,
+            transactionType,
+            request.Description,
+            convertedAmountUSD,
+            convertedAmountARS,
+            null,
+            request.CategoryId
+        );
+
+        await _accountRepository.AddTransactionAsync(transaction);
+        await _accountRepository.SaveChangesAsync();
+
+        return transaction.Id;
+    }
+
+    public async Task<bool> DeleteTransactionAsync(Guid transactionId, Guid userId, CancellationToken cancellationToken = default)
+    {
+        var transaction = await _accountRepository.GetTransactionByIdAsync(transactionId, userId, cancellationToken);
+
+        if (transaction is null)
+        {
+            return false;
+        }
+
+        await _accountRepository.DeleteTransactionAsync(transaction, cancellationToken);
+        await _accountRepository.SaveChangesAsync();
+
+        return true;
     }
 
     public async Task<AccountDto?> GetAccountByIdAsync(Guid id, Guid userId)

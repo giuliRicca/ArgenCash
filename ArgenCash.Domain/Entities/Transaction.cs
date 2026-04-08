@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+using System;
 
 namespace ArgenCash.Domain.Entities
 {
@@ -9,19 +7,19 @@ namespace ArgenCash.Domain.Entities
         public Guid Id { get; private set; }
         public Guid AccountId { get; private set; }
         public decimal Amount { get; private set; }
-        public string TransactionType { get; private set; } = string.Empty;
+        public TransactionType TransactionType { get; private set; }
         public string Currency { get; private set; } = string.Empty;
         public string Description { get; private set; } = string.Empty;
         public decimal ConvertedAmountUSD { get; private set; }
         public decimal ConvertedAmountARS { get; private set; }
         public Guid? ExchangeRateId { get; private set; }
+        public Guid? CategoryId { get; private set; }
         public DateTime TransactionDate { get; private set; }
         private Transaction() { }
 
-        public static Transaction Create(Guid accountId, decimal amount, string currency, string transactionType, string description, decimal convertedAmountUSD, decimal convertedAmountARS, Guid? exchangeRateId)
+        public static Transaction Create(Guid accountId, decimal amount, string currency, TransactionType transactionType, string? description, decimal convertedAmountUSD, decimal convertedAmountARS, Guid? exchangeRateId, Guid? categoryId = null)
         {
             var normalizedCurrency = NormalizeCurrencyCode(currency, nameof(currency));
-            var normalizedTransactionType = TransactionTypes.Normalize(transactionType, nameof(transactionType));
             var normalizedDescription = NormalizeDescription(description);
 
             if (accountId == Guid.Empty)
@@ -32,18 +30,23 @@ namespace ArgenCash.Domain.Entities
                 throw new ArgumentException("Converted USD amount must be greater than zero.", nameof(convertedAmountUSD));
             if (convertedAmountARS <= 0)
                 throw new ArgumentException("Converted ARS amount must be greater than zero.", nameof(convertedAmountARS));
+            if (exchangeRateId == Guid.Empty)
+                throw new ArgumentException("Exchange rate id cannot be empty.", nameof(exchangeRateId));
+            if (categoryId == Guid.Empty)
+                throw new ArgumentException("Category id cannot be empty.", nameof(categoryId));
 
             return new Transaction
             {
                 Id = Guid.NewGuid(),
                 AccountId = accountId,
                 Amount = amount,
-                TransactionType = normalizedTransactionType,
+                TransactionType = transactionType,
                 Currency = normalizedCurrency,
                 Description = normalizedDescription,
                 ConvertedAmountUSD = convertedAmountUSD,
                 ConvertedAmountARS = convertedAmountARS,
                 ExchangeRateId = exchangeRateId,
+                CategoryId = categoryId,
                 TransactionDate = DateTime.UtcNow
             };
         }
@@ -65,11 +68,11 @@ namespace ArgenCash.Domain.Entities
             return normalizedCurrencyCode;
         }
 
-        private static string NormalizeDescription(string description)
+        private static string NormalizeDescription(string? description)
         {
             if (string.IsNullOrWhiteSpace(description))
             {
-                throw new ArgumentException("Description is required.", nameof(description));
+                return string.Empty;
             }
 
             var normalizedDescription = description.Trim();

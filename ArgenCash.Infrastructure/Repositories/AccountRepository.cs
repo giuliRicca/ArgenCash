@@ -21,6 +21,26 @@ namespace ArgenCash.Infrastructure.Repositories
             await _context.Accounts.AddAsync(account);
         }
 
+        public async Task AddTransactionAsync(Transaction transaction)
+        {
+            await _context.Transactions.AddAsync(transaction);
+        }
+
+        public async Task<Transaction?> GetTransactionByIdAsync(Guid transactionId, Guid userId, CancellationToken cancellationToken = default)
+        {
+            return await _context.Transactions
+                .SingleOrDefaultAsync(
+                    transaction => transaction.Id == transactionId &&
+                                   _context.Accounts.Any(account => account.Id == transaction.AccountId && account.UserId == userId),
+                    cancellationToken);
+        }
+
+        public Task DeleteTransactionAsync(Transaction transaction, CancellationToken cancellationToken = default)
+        {
+            _context.Transactions.Remove(transaction);
+            return Task.CompletedTask;
+        }
+
         public async Task<AccountBalanceSnapshot?> GetByIdAsync(Guid id, Guid userId)
         {
             return await BuildAccountBalanceQuery(userId)
@@ -45,12 +65,17 @@ namespace ArgenCash.Infrastructure.Repositories
                 {
                     Id = transaction.Id,
                     Amount = transaction.Amount,
-                    TransactionType = transaction.TransactionType,
+                    TransactionType = TransactionTypes.ToString(transaction.TransactionType),
                     Currency = transaction.Currency,
                     Description = transaction.Description,
                     ConvertedAmountUsd = transaction.ConvertedAmountUSD,
                     ConvertedAmountArs = transaction.ConvertedAmountARS,
-                    TransactionDate = transaction.TransactionDate
+                    TransactionDate = transaction.TransactionDate,
+                    CategoryId = transaction.CategoryId,
+                    CategoryName = _context.Categories
+                        .Where(c => c.Id == transaction.CategoryId)
+                        .Select(c => (string?)c.Name)
+                        .FirstOrDefault()
                 })
                 .ToListAsync();
 
@@ -90,15 +115,15 @@ namespace ArgenCash.Infrastructure.Repositories
                     CurrencyCode = account.CurrencyCode,
                     BalanceInAccountCurrency = _context.Transactions
                         .Where(transaction => transaction.AccountId == account.Id)
-                        .Select(transaction => (decimal?)(transaction.TransactionType == TransactionTypes.Expense ? -transaction.Amount : transaction.Amount))
+                        .Select(transaction => (decimal?)(transaction.TransactionType == TransactionType.Expense ? -transaction.Amount : transaction.Amount))
                         .Sum() ?? 0m,
                     BalanceUsd = _context.Transactions
                         .Where(transaction => transaction.AccountId == account.Id)
-                        .Select(transaction => (decimal?)(transaction.TransactionType == TransactionTypes.Expense ? -transaction.ConvertedAmountUSD : transaction.ConvertedAmountUSD))
+                        .Select(transaction => (decimal?)(transaction.TransactionType == TransactionType.Expense ? -transaction.ConvertedAmountUSD : transaction.ConvertedAmountUSD))
                         .Sum() ?? 0m,
                     BalanceArs = _context.Transactions
                         .Where(transaction => transaction.AccountId == account.Id)
-                        .Select(transaction => (decimal?)(transaction.TransactionType == TransactionTypes.Expense ? -transaction.ConvertedAmountARS : transaction.ConvertedAmountARS))
+                        .Select(transaction => (decimal?)(transaction.TransactionType == TransactionType.Expense ? -transaction.ConvertedAmountARS : transaction.ConvertedAmountARS))
                         .Sum() ?? 0m,
                 });
         }

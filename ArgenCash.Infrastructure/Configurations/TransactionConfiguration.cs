@@ -1,9 +1,7 @@
-﻿using ArgenCash.Domain.Entities;
+using ArgenCash.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using System;
-using System.Collections.Generic;
-using System.Text;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace ArgenCash.Infrastructure.Configurations
 {
@@ -23,6 +21,9 @@ namespace ArgenCash.Infrastructure.Configurations
 
             builder.Property(t => t.TransactionType)
                 .IsRequired()
+                .HasConversion(new ValueConverter<TransactionType, string>(
+                    v => TransactionTypes.ToString(v),
+                    v => TransactionTypes.ToEnum(v)))
                 .HasMaxLength(20);
 
             builder.Property(t => t.ConvertedAmountUSD)
