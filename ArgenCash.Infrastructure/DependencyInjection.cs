@@ -35,7 +35,7 @@ public static class DependencyInjection
         services.AddDbContext<ArgenCashDbContext>(options =>
             options.UseNpgsql(connectionString));
 
-        services.AddHttpClient<ILiveExchangeRateProvider, OpenExchangeRateProvider>((serviceProvider, client) =>
+        services.AddHttpClient<ILiveExchangeRateProvider, DolarApiProvider>((serviceProvider, client) =>
         {
             var options = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<ExchangeRateApiOptions>>().Value;
             client.BaseAddress = new Uri(options.BaseUrl);
@@ -47,6 +47,7 @@ public static class DependencyInjection
         services.AddScoped<IPasswordHasher, PasswordHasher>();
         services.AddScoped<IExchangeRateRepository, ExchangeRateRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<ICategoryRepository, CategoryRepository>();
 
         return services;
     }
