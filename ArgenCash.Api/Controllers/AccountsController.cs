@@ -63,6 +63,25 @@ public class AccountsController : ControllerBase
         return Ok(accounts);
     }
 
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> UpdateAccount(Guid id, [FromBody] UpdateAccountRequest request, CancellationToken cancellationToken = default)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
+        try
+        {
+            var updated = await _accountService.UpdateAccountNameAsync(userId, id, request, cancellationToken);
+            return updated ? NoContent() : NotFound();
+        }
+        catch (ArgumentException ex)
+        {
+            return ValidationProblem(detail: ex.Message);
+        }
+    }
+
     private bool TryGetCurrentUserId(out Guid userId)
     {
         var subject = User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier);

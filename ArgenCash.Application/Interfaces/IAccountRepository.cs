@@ -6,6 +6,7 @@ namespace ArgenCash.Application.Interfaces;
 public interface IAccountRepository
 {
     Task AddAsync(Account account);
+    Task<Account?> GetForUpdateAsync(Guid id, Guid userId, CancellationToken cancellationToken = default);
     Task AddTransactionAsync(Transaction transaction);
     Task<Transaction?> GetTransactionByIdAsync(Guid transactionId, Guid userId, CancellationToken cancellationToken = default);
     Task DeleteTransactionAsync(Transaction transaction, CancellationToken cancellationToken = default);

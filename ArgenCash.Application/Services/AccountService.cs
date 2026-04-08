@@ -27,6 +27,23 @@ public class AccountService : IAccountService
         return account.Id;
     }
 
+    public async Task<bool> UpdateAccountNameAsync(Guid userId, Guid accountId, UpdateAccountRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var account = await _accountRepository.GetForUpdateAsync(accountId, userId, cancellationToken);
+
+        if (account is null)
+        {
+            return false;
+        }
+
+        account.Rename(request.Name);
+        await _accountRepository.SaveChangesAsync();
+
+        return true;
+    }
+
     public async Task<Guid> CreateTransactionAsync(Guid userId, CreateTransactionRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);

@@ -21,6 +21,12 @@ namespace ArgenCash.Infrastructure.Repositories
             await _context.Accounts.AddAsync(account);
         }
 
+        public async Task<Account?> GetForUpdateAsync(Guid id, Guid userId, CancellationToken cancellationToken = default)
+        {
+            return await _context.Accounts
+                .SingleOrDefaultAsync(account => account.Id == id && account.UserId == userId, cancellationToken);
+        }
+
         public async Task AddTransactionAsync(Transaction transaction)
         {
             await _context.Transactions.AddAsync(transaction);
