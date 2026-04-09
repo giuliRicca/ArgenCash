@@ -90,6 +90,7 @@ namespace ArgenCash.Infrastructure.Repositories
                 Id = account.Id,
                 Name = account.Name,
                 CurrencyCode = account.CurrencyCode,
+                ExchangeRateType = account.ExchangeRateType,
                 BalanceInAccountCurrency = account.BalanceInAccountCurrency,
                 BalanceUsd = account.BalanceUsd,
                 BalanceArs = account.BalanceArs,
@@ -119,6 +120,7 @@ namespace ArgenCash.Infrastructure.Repositories
                     Id = account.Id,
                     Name = account.Name,
                     CurrencyCode = account.CurrencyCode,
+                    ExchangeRateType = account.ExchangeRateType,
                     BalanceInAccountCurrency = _context.Transactions
                         .Where(transaction => transaction.AccountId == account.Id)
                         .Select(transaction => (decimal?)(transaction.TransactionType == TransactionType.Expense ? -transaction.Amount : transaction.Amount))

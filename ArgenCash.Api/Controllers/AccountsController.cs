@@ -73,7 +73,7 @@ public class AccountsController : ControllerBase
 
         try
         {
-            var updated = await _accountService.UpdateAccountNameAsync(userId, id, request, cancellationToken);
+            var updated = await _accountService.UpdateAccountAsync(userId, id, request, cancellationToken);
             return updated ? NoContent() : NotFound();
         }
         catch (ArgumentException ex)

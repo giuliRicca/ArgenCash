@@ -12,6 +12,7 @@ namespace ArgenCash.Domain.Entities
         public Guid? UserId { get; private set; }
         public string Name { get; private set; } = string.Empty;
         public string CurrencyCode { get; private set; } = string.Empty;
+        public ExchangeRateType ExchangeRateType { get; private set; } = ExchangeRateType.Official;
         public DateTime CreatedAt { get; private set; }
 
         private Account() { }
@@ -32,6 +33,7 @@ namespace ArgenCash.Domain.Entities
                 UserId = userId,
                 Name = normalizedName,
                 CurrencyCode = normalizedCurrencyCode,
+                ExchangeRateType = ExchangeRateType.Official,
                 CreatedAt = DateTime.UtcNow
             };
         }
@@ -39,6 +41,11 @@ namespace ArgenCash.Domain.Entities
         public void Rename(string name)
         {
             Name = NormalizeName(name);
+        }
+
+        public void SetExchangeRateType(ExchangeRateType exchangeRateType)
+        {
+            ExchangeRateType = exchangeRateType;
         }
 
         private static string NormalizeName(string name)

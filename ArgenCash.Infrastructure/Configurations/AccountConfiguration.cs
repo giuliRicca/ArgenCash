@@ -1,6 +1,7 @@
-﻿using ArgenCash.Domain.Entities;
+using ArgenCash.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -23,6 +24,14 @@ namespace ArgenCash.Infrastructure.Configurations
                 .IsRequired()
                 .HasMaxLength(3);
 
+            builder.Property(a => a.ExchangeRateType)
+                .IsRequired()
+                .HasConversion(new ValueConverter<ExchangeRateType, string>(
+                    value => ExchangeRateTypes.ToString(value),
+                    value => ExchangeRateTypes.ToEnum(value)))
+                .HasDefaultValue(ExchangeRateType.Official)
+                .HasMaxLength(20);
+
             builder.Property(a => a.CreatedAt)
                 .IsRequired();
 
@@ -36,6 +45,7 @@ namespace ArgenCash.Infrastructure.Configurations
             builder.ToTable(table =>
             {
                 table.HasCheckConstraint("CK_Accounts_CurrencyCode_Length", "char_length(\"CurrencyCode\") = 3");
+                table.HasCheckConstraint("CK_Accounts_ExchangeRateType_Allowed", "\"ExchangeRateType\" IN ('OFFICIAL', 'CCL', 'MEP', 'BLUE', 'CRYPTO')");
             });
         }
     }

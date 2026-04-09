@@ -1,5 +1,6 @@
 using ArgenCash.Application.DTOs;
 using ArgenCash.Application.Interfaces;
+using ArgenCash.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -64,12 +65,42 @@ public class ExchangeRatesController : ControllerBase
     }
 
     [HttpGet("live")]
-    public async Task<IActionResult> GetLive([FromQuery] string baseCurrency = "USD", [FromQuery] string targetCurrency = "ARS", CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetLive([FromQuery] string baseCurrency = "USD", [FromQuery] string targetCurrency = "ARS", [FromQuery] ExchangeRateType rateType = ExchangeRateType.Official, CancellationToken cancellationToken = default)
     {
         try
         {
-            var exchangeRate = await _exchangeRateService.GetLiveRateAsync(baseCurrency, targetCurrency, cancellationToken);
+            var exchangeRate = await _exchangeRateService.GetLiveRateAsync(baseCurrency, targetCurrency, rateType, cancellationToken);
             return Ok(exchangeRate);
+        }
+        catch (ArgumentException ex)
+        {
+            return ValidationProblem(detail: ex.Message);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Problem(title: "Exchange-rate provider failed.", detail: ex.Message, statusCode: StatusCodes.Status502BadGateway);
+        }
+        catch (HttpRequestException ex)
+        {
+            return Problem(title: "Exchange-rate provider failed.", detail: ex.Message, statusCode: StatusCodes.Status502BadGateway);
+        }
+    }
+
+    [HttpGet("live/batch")]
+    public async Task<IActionResult> GetLiveBatch(
+        [FromQuery] string baseCurrency = "USD",
+        [FromQuery] string targetCurrency = "ARS",
+        [FromQuery] ExchangeRateType[]? rateTypes = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var requestedRateTypes = rateTypes is { Length: > 0 }
+                ? rateTypes
+                : [ExchangeRateType.Official, ExchangeRateType.Blue, ExchangeRateType.Ccl, ExchangeRateType.Crypto];
+
+            var rates = await _exchangeRateService.GetLiveRatesAsync(baseCurrency, targetCurrency, requestedRateTypes, cancellationToken);
+            return Ok(rates);
         }
         catch (ArgumentException ex)
         {

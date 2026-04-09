@@ -6,10 +6,8 @@ namespace ArgenCash.Domain.Entities
 {
     public class ExchangeRate
     {
-        private const int MaxRateTypeLength = 50;
-
         public Guid Id { get; private set; }
-        public string RateType { get; private set; } = string.Empty;
+        public ExchangeRateType RateType { get; private set; }
         public string BaseCurrency { get; private set; } = string.Empty;
         public string TargetCurrency { get; private set; } = string.Empty;
         public decimal BuyPrice { get; private set; }
@@ -20,7 +18,11 @@ namespace ArgenCash.Domain.Entities
 
         public static ExchangeRate Create(string rateType, string baseCurrency, string targetCurrency, decimal buyPrice, decimal sellPrice, DateTime effectiveDate)
         {
-            var normalizedRateType = NormalizeRateType(rateType);
+            return Create(ExchangeRateTypes.ToEnum(rateType), baseCurrency, targetCurrency, buyPrice, sellPrice, effectiveDate);
+        }
+
+        public static ExchangeRate Create(ExchangeRateType rateType, string baseCurrency, string targetCurrency, decimal buyPrice, decimal sellPrice, DateTime effectiveDate)
+        {
             var normalizedBaseCurrency = NormalizeCurrencyCode(baseCurrency, nameof(baseCurrency));
             var normalizedTargetCurrency = NormalizeCurrencyCode(targetCurrency, nameof(targetCurrency));
             var normalizedEffectiveDate = NormalizeEffectiveDate(effectiveDate);
@@ -48,30 +50,13 @@ namespace ArgenCash.Domain.Entities
             return new ExchangeRate
             {
                 Id = Guid.NewGuid(),
-                RateType = normalizedRateType,
+                RateType = rateType,
                 BaseCurrency = normalizedBaseCurrency,
                 TargetCurrency = normalizedTargetCurrency,
                 BuyPrice = buyPrice,
                 SellPrice = sellPrice,
                 EffectiveDate = normalizedEffectiveDate
             };
-        }
-
-        private static string NormalizeRateType(string rateType)
-        {
-            if (string.IsNullOrWhiteSpace(rateType))
-            {
-                throw new ArgumentException("Rate type is required.", nameof(rateType));
-            }
-
-            var normalizedRateType = rateType.Trim();
-
-            if (normalizedRateType.Length > MaxRateTypeLength)
-            {
-                throw new ArgumentException($"Rate type cannot exceed {MaxRateTypeLength} characters.", nameof(rateType));
-            }
-
-            return normalizedRateType;
         }
 
         private static string NormalizeCurrencyCode(string currencyCode, string parameterName)
