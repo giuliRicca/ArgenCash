@@ -7,12 +7,12 @@ namespace ArgenCash.Application.Services;
 public class AccountService : IAccountService
 {
     private readonly IAccountRepository _accountRepository;
-    private readonly ILiveExchangeRateProvider _exchangeRateProvider;
+    private readonly IExchangeRateResolver _exchangeRateResolver;
 
-    public AccountService(IAccountRepository accountRepository, ILiveExchangeRateProvider exchangeRateProvider)
+    public AccountService(IAccountRepository accountRepository, IExchangeRateResolver exchangeRateResolver)
     {
         _accountRepository = accountRepository;
-        _exchangeRateProvider = exchangeRateProvider;
+        _exchangeRateResolver = exchangeRateResolver;
     }
 
     public async Task<Guid> CreateAccountAsync(Guid userId, CreateAccountRequest request)
@@ -27,23 +27,57 @@ public class AccountService : IAccountService
         return account.Id;
     }
 
+    public async Task<bool> UpdateAccountAsync(Guid userId, Guid accountId, UpdateAccountRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var account = await _accountRepository.GetForUpdateAsync(accountId, userId, cancellationToken);
+
+        if (account is null)
+        {
+            return false;
+        }
+
+        var hasNameUpdate = !string.IsNullOrWhiteSpace(request.Name);
+        var hasExchangeRateTypeUpdate = request.ExchangeRateType.HasValue;
+
+        if (!hasNameUpdate && !hasExchangeRateTypeUpdate)
+        {
+            throw new ArgumentException("At least one account field must be provided.", nameof(request));
+        }
+
+        if (hasNameUpdate)
+        {
+            account.Rename(request.Name!);
+        }
+
+        if (hasExchangeRateTypeUpdate)
+        {
+            account.SetExchangeRateType(request.ExchangeRateType!.Value);
+        }
+
+        await _accountRepository.SaveChangesAsync();
+
+        return true;
+    }
+
     public async Task<Guid> CreateTransactionAsync(Guid userId, CreateTransactionRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var account = await _accountRepository.GetByIdAsync(request.AccountId, userId);
+        var account = await _accountRepository.GetForUpdateAsync(request.AccountId, userId, cancellationToken);
         if (account is null)
         {
             throw new ArgumentException("Account not found.", nameof(request.AccountId));
         }
 
-        var liveRate = await _exchangeRateProvider.GetLiveRateAsync("USD", "ARS", cancellationToken);
+        var resolvedRate = await _exchangeRateResolver.ResolveAsync("USD", "ARS", account.ExchangeRateType, cancellationToken);
         var convertedAmountUSD = request.Currency == "USD"
             ? request.Amount
-            : request.Amount / liveRate.SellRate;
+            : request.Amount / resolvedRate.SellPrice;
         var convertedAmountARS = request.Currency == "ARS"
             ? request.Amount
-            : request.Amount * liveRate.BuyRate;
+            : request.Amount * resolvedRate.BuyPrice;
 
         var transactionType = TransactionTypes.ToEnum(request.TransactionType);
 
@@ -55,7 +89,7 @@ public class AccountService : IAccountService
             request.Description,
             convertedAmountUSD,
             convertedAmountARS,
-            null,
+            resolvedRate.Id,
             request.CategoryId
         );
 
@@ -63,6 +97,72 @@ public class AccountService : IAccountService
         await _accountRepository.SaveChangesAsync();
 
         return transaction.Id;
+    }
+
+    public async Task<Guid> CreateTransferAsync(Guid userId, CreateTransferRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (request.FromAccountId == request.ToAccountId)
+        {
+            throw new ArgumentException("Source and destination accounts must be different.", nameof(request.ToAccountId));
+        }
+
+        var fromAccount = await _accountRepository.GetForUpdateAsync(request.FromAccountId, userId, cancellationToken);
+        if (fromAccount is null)
+        {
+            throw new ArgumentException("Source account not found.", nameof(request.FromAccountId));
+        }
+
+        var toAccount = await _accountRepository.GetForUpdateAsync(request.ToAccountId, userId, cancellationToken);
+        if (toAccount is null)
+        {
+            throw new ArgumentException("Destination account not found.", nameof(request.ToAccountId));
+        }
+
+        var resolvedRate = await _exchangeRateResolver.ResolveAsync("USD", "ARS", fromAccount.ExchangeRateType, cancellationToken);
+
+        var convertedAmountUsd = request.Currency == "USD"
+            ? request.Amount
+            : request.Amount / resolvedRate.SellPrice;
+        var convertedAmountArs = request.Currency == "ARS"
+            ? request.Amount
+            : request.Amount * resolvedRate.BuyPrice;
+
+        var transferGroupId = Guid.NewGuid();
+        var baseDescription = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description;
+
+        var fromTransaction = Transaction.Create(
+            request.FromAccountId,
+            request.Amount,
+            request.Currency,
+            TransactionType.Expense,
+            baseDescription ?? $"Transfer to {toAccount.Name}",
+            convertedAmountUsd,
+            convertedAmountArs,
+            resolvedRate.Id,
+            null,
+            transferGroupId,
+            request.ToAccountId);
+
+        var toTransaction = Transaction.Create(
+            request.ToAccountId,
+            request.Amount,
+            request.Currency,
+            TransactionType.Income,
+            baseDescription ?? $"Transfer from {fromAccount.Name}",
+            convertedAmountUsd,
+            convertedAmountArs,
+            resolvedRate.Id,
+            null,
+            transferGroupId,
+            request.FromAccountId);
+
+        await _accountRepository.AddTransactionAsync(fromTransaction);
+        await _accountRepository.AddTransactionAsync(toTransaction);
+        await _accountRepository.SaveChangesAsync();
+
+        return transferGroupId;
     }
 
     public async Task<bool> DeleteTransactionAsync(Guid transactionId, Guid userId, CancellationToken cancellationToken = default)
@@ -74,7 +174,23 @@ public class AccountService : IAccountService
             return false;
         }
 
-        await _accountRepository.DeleteTransactionAsync(transaction, cancellationToken);
+        if (transaction.TransferGroupId.HasValue)
+        {
+            var groupedTransactions = await _accountRepository.GetTransactionsByTransferGroupIdAsync(
+                transaction.TransferGroupId.Value,
+                userId,
+                cancellationToken);
+
+            foreach (var groupedTransaction in groupedTransactions)
+            {
+                await _accountRepository.DeleteTransactionAsync(groupedTransaction, cancellationToken);
+            }
+        }
+        else
+        {
+            await _accountRepository.DeleteTransactionAsync(transaction, cancellationToken);
+        }
+
         await _accountRepository.SaveChangesAsync();
 
         return true;
@@ -108,6 +224,7 @@ public class AccountService : IAccountService
             Id = account.Id,
             Name = account.Name,
             CurrencyCode = account.CurrencyCode,
+            ExchangeRateType = ExchangeRateTypes.ToString(account.ExchangeRateType),
             BalanceInAccountCurrency = account.BalanceInAccountCurrency,
             BalanceUsd = account.BalanceUsd,
             BalanceArs = account.BalanceArs
@@ -121,6 +238,7 @@ public class AccountService : IAccountService
             Id = account.Id,
             Name = account.Name,
             CurrencyCode = account.CurrencyCode,
+            ExchangeRateType = ExchangeRateTypes.ToString(account.ExchangeRateType),
             BalanceInAccountCurrency = account.BalanceInAccountCurrency,
             BalanceUsd = account.BalanceUsd,
             BalanceArs = account.BalanceArs,

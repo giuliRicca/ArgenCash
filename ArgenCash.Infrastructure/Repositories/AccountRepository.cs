@@ -21,6 +21,12 @@ namespace ArgenCash.Infrastructure.Repositories
             await _context.Accounts.AddAsync(account);
         }
 
+        public async Task<Account?> GetForUpdateAsync(Guid id, Guid userId, CancellationToken cancellationToken = default)
+        {
+            return await _context.Accounts
+                .SingleOrDefaultAsync(account => account.Id == id && account.UserId == userId, cancellationToken);
+        }
+
         public async Task AddTransactionAsync(Transaction transaction)
         {
             await _context.Transactions.AddAsync(transaction);
@@ -33,6 +39,14 @@ namespace ArgenCash.Infrastructure.Repositories
                     transaction => transaction.Id == transactionId &&
                                    _context.Accounts.Any(account => account.Id == transaction.AccountId && account.UserId == userId),
                     cancellationToken);
+        }
+
+        public async Task<IReadOnlyList<Transaction>> GetTransactionsByTransferGroupIdAsync(Guid transferGroupId, Guid userId, CancellationToken cancellationToken = default)
+        {
+            return await _context.Transactions
+                .Where(transaction => transaction.TransferGroupId == transferGroupId &&
+                                      _context.Accounts.Any(account => account.Id == transaction.AccountId && account.UserId == userId))
+                .ToListAsync(cancellationToken);
         }
 
         public Task DeleteTransactionAsync(Transaction transaction, CancellationToken cancellationToken = default)
@@ -71,6 +85,12 @@ namespace ArgenCash.Infrastructure.Repositories
                     ConvertedAmountUsd = transaction.ConvertedAmountUSD,
                     ConvertedAmountArs = transaction.ConvertedAmountARS,
                     TransactionDate = transaction.TransactionDate,
+                    TransferGroupId = transaction.TransferGroupId,
+                    CounterpartyAccountId = transaction.CounterpartyAccountId,
+                    CounterpartyAccountName = _context.Accounts
+                        .Where(a => a.Id == transaction.CounterpartyAccountId)
+                        .Select(a => (string?)a.Name)
+                        .FirstOrDefault(),
                     CategoryId = transaction.CategoryId,
                     CategoryName = _context.Categories
                         .Where(c => c.Id == transaction.CategoryId)
@@ -84,6 +104,7 @@ namespace ArgenCash.Infrastructure.Repositories
                 Id = account.Id,
                 Name = account.Name,
                 CurrencyCode = account.CurrencyCode,
+                ExchangeRateType = account.ExchangeRateType,
                 BalanceInAccountCurrency = account.BalanceInAccountCurrency,
                 BalanceUsd = account.BalanceUsd,
                 BalanceArs = account.BalanceArs,
@@ -113,6 +134,7 @@ namespace ArgenCash.Infrastructure.Repositories
                     Id = account.Id,
                     Name = account.Name,
                     CurrencyCode = account.CurrencyCode,
+                    ExchangeRateType = account.ExchangeRateType,
                     BalanceInAccountCurrency = _context.Transactions
                         .Where(transaction => transaction.AccountId == account.Id)
                         .Select(transaction => (decimal?)(transaction.TransactionType == TransactionType.Expense ? -transaction.Amount : transaction.Amount))

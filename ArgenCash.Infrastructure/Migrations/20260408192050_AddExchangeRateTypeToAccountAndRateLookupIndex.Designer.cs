@@ -3,6 +3,7 @@ using System;
 using ArgenCash.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ArgenCash.Infrastructure.Migrations
 {
     [DbContext(typeof(ArgenCashDbContext))]
-    partial class ArgenCashDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260408192050_AddExchangeRateTypeToAccountAndRateLookupIndex")]
+    partial class AddExchangeRateTypeToAccountAndRateLookupIndex
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -238,9 +241,6 @@ namespace ArgenCash.Infrastructure.Migrations
                         .HasPrecision(19, 4)
                         .HasColumnType("numeric(19,4)");
 
-                    b.Property<Guid?>("CounterpartyAccountId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("Currency")
                         .IsRequired()
                         .HasMaxLength(3)
@@ -262,18 +262,11 @@ namespace ArgenCash.Infrastructure.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
-                    b.Property<Guid?>("TransferGroupId")
-                        .HasColumnType("uuid");
-
                     b.HasKey("Id");
 
                     b.HasIndex("AccountId");
 
-                    b.HasIndex("CounterpartyAccountId");
-
                     b.HasIndex("ExchangeRateId");
-
-                    b.HasIndex("TransferGroupId");
 
                     b.ToTable("Transactions", t =>
                         {
@@ -335,11 +328,6 @@ namespace ArgenCash.Infrastructure.Migrations
                         .HasForeignKey("AccountId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("ArgenCash.Domain.Entities.Account", null)
-                        .WithMany()
-                        .HasForeignKey("CounterpartyAccountId")
-                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("ArgenCash.Domain.Entities.ExchangeRate", null)
                         .WithMany()

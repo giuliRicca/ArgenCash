@@ -10,6 +10,9 @@ public class AccountTransactionDto
     public decimal ConvertedAmountUsd { get; init; }
     public decimal ConvertedAmountArs { get; init; }
     public DateTime TransactionDate { get; init; }
+    public Guid? TransferGroupId { get; init; }
+    public Guid? CounterpartyAccountId { get; init; }
+    public string? CounterpartyAccountName { get; init; }
     public Guid? CategoryId { get; init; }
     public string? CategoryName { get; init; }
 }

@@ -50,9 +50,25 @@ public class ExchangeRateService : IExchangeRateService
         return Map(exchangeRate);
     }
 
-    public async Task<LiveExchangeRateDto> GetLiveRateAsync(string baseCurrency, string targetCurrency, CancellationToken cancellationToken = default)
+    public async Task<LiveExchangeRateDto> GetLiveRateAsync(string baseCurrency, string targetCurrency, ExchangeRateType rateType = ExchangeRateType.Official, CancellationToken cancellationToken = default)
     {
-        return await _liveExchangeRateProvider.GetLiveRateAsync(baseCurrency, targetCurrency, cancellationToken);
+        return await _liveExchangeRateProvider.GetLiveRateAsync(
+            baseCurrency,
+            targetCurrency,
+            rateType,
+            cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<LiveExchangeRateByTypeDto>> GetLiveRatesAsync(string baseCurrency, string targetCurrency, IReadOnlyCollection<ExchangeRateType> rateTypes, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(rateTypes);
+
+        if (rateTypes.Count == 0)
+        {
+            throw new ArgumentException("At least one rate type must be requested.", nameof(rateTypes));
+        }
+
+        return await _liveExchangeRateProvider.GetLiveRatesAsync(baseCurrency, targetCurrency, rateTypes, cancellationToken);
     }
 
     private static ExchangeRateDto? Map(ExchangeRate? exchangeRate)
@@ -63,7 +79,7 @@ public class ExchangeRateService : IExchangeRateService
             : new ExchangeRateDto
             {
                 Id = exchangeRate.Id,
-                RateType = exchangeRate.RateType,
+                RateType = ExchangeRateTypes.ToString(exchangeRate.RateType),
                 BaseCurrency = exchangeRate.BaseCurrency,
                 TargetCurrency = exchangeRate.TargetCurrency,
                 BuyPrice = exchangeRate.BuyPrice,

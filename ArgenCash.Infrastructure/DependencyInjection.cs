@@ -35,6 +35,8 @@ public static class DependencyInjection
         services.AddDbContext<ArgenCashDbContext>(options =>
             options.UseNpgsql(connectionString));
 
+        services.AddMemoryCache();
+
         services.AddHttpClient<ILiveExchangeRateProvider, DolarApiProvider>((serviceProvider, client) =>
         {
             var options = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<ExchangeRateApiOptions>>().Value;

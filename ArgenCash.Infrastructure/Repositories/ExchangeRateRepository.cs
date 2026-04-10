@@ -40,6 +40,21 @@ public class ExchangeRateRepository : IExchangeRateRepository
             .FirstOrDefaultAsync();
     }
 
+    public async Task<ExchangeRate?> GetLatestAsync(string baseCurrency, string targetCurrency, ExchangeRateType rateType)
+    {
+        var normalizedBaseCurrency = baseCurrency.Trim().ToUpperInvariant();
+        var normalizedTargetCurrency = targetCurrency.Trim().ToUpperInvariant();
+
+        return await _context.ExchangeRates
+            .AsNoTracking()
+            .Where(exchangeRate =>
+                exchangeRate.BaseCurrency == normalizedBaseCurrency &&
+                exchangeRate.TargetCurrency == normalizedTargetCurrency &&
+                exchangeRate.RateType == rateType)
+            .OrderByDescending(exchangeRate => exchangeRate.EffectiveDate)
+            .FirstOrDefaultAsync();
+    }
+
     public async Task SaveChangesAsync()
     {
         await _context.SaveChangesAsync();

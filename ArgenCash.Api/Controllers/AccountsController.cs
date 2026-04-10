@@ -1,7 +1,5 @@
 using ArgenCash.Application.DTOs;
 using ArgenCash.Application.Interfaces;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -10,7 +8,7 @@ namespace ArgenCash.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/[controller]")]
-public class AccountsController : ControllerBase
+public class AccountsController : ApiControllerBase
 {
     private readonly IAccountService _accountService;
 
@@ -63,9 +61,23 @@ public class AccountsController : ControllerBase
         return Ok(accounts);
     }
 
-    private bool TryGetCurrentUserId(out Guid userId)
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> UpdateAccount(Guid id, [FromBody] UpdateAccountRequest request, CancellationToken cancellationToken = default)
     {
-        var subject = User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
-        return Guid.TryParse(subject, out userId);
+        if (!TryGetCurrentUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
+        try
+        {
+            var updated = await _accountService.UpdateAccountAsync(userId, id, request, cancellationToken);
+            return updated ? NoContent() : NotFound();
+        }
+        catch (ArgumentException ex)
+        {
+            return ValidationProblem(detail: ex.Message);
+        }
     }
+
 }
