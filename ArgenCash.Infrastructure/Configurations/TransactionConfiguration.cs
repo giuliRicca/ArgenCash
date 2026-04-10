@@ -51,6 +51,12 @@ namespace ArgenCash.Infrastructure.Configurations
                 .OnDelete(DeleteBehavior.Restrict);
 
             builder.HasIndex(t => t.ExchangeRateId);
+            builder.HasIndex(t => t.TransferGroupId);
+
+            builder.HasOne<Account>()
+                .WithMany()
+                .HasForeignKey(t => t.CounterpartyAccountId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             builder.ToTable(table =>
             {

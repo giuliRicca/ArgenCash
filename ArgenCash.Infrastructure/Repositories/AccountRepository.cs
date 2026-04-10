@@ -41,6 +41,14 @@ namespace ArgenCash.Infrastructure.Repositories
                     cancellationToken);
         }
 
+        public async Task<IReadOnlyList<Transaction>> GetTransactionsByTransferGroupIdAsync(Guid transferGroupId, Guid userId, CancellationToken cancellationToken = default)
+        {
+            return await _context.Transactions
+                .Where(transaction => transaction.TransferGroupId == transferGroupId &&
+                                      _context.Accounts.Any(account => account.Id == transaction.AccountId && account.UserId == userId))
+                .ToListAsync(cancellationToken);
+        }
+
         public Task DeleteTransactionAsync(Transaction transaction, CancellationToken cancellationToken = default)
         {
             _context.Transactions.Remove(transaction);
@@ -77,6 +85,12 @@ namespace ArgenCash.Infrastructure.Repositories
                     ConvertedAmountUsd = transaction.ConvertedAmountUSD,
                     ConvertedAmountArs = transaction.ConvertedAmountARS,
                     TransactionDate = transaction.TransactionDate,
+                    TransferGroupId = transaction.TransferGroupId,
+                    CounterpartyAccountId = transaction.CounterpartyAccountId,
+                    CounterpartyAccountName = _context.Accounts
+                        .Where(a => a.Id == transaction.CounterpartyAccountId)
+                        .Select(a => (string?)a.Name)
+                        .FirstOrDefault(),
                     CategoryId = transaction.CategoryId,
                     CategoryName = _context.Categories
                         .Where(c => c.Id == transaction.CategoryId)

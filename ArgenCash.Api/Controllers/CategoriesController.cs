@@ -1,7 +1,5 @@
 using ArgenCash.Application.DTOs;
 using ArgenCash.Application.Interfaces;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -10,7 +8,7 @@ namespace ArgenCash.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/[controller]")]
-public class CategoriesController : ControllerBase
+public class CategoriesController : ApiControllerBase
 {
     private readonly ICategoryService _categoryService;
 
@@ -69,9 +67,4 @@ public class CategoriesController : ControllerBase
         return deleted ? NoContent() : NotFound();
     }
 
-    private bool TryGetCurrentUserId(out Guid userId)
-    {
-        var subject = User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
-        return Guid.TryParse(subject, out userId);
-    }
 }

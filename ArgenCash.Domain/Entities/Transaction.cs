@@ -13,11 +13,13 @@ namespace ArgenCash.Domain.Entities
         public decimal ConvertedAmountUSD { get; private set; }
         public decimal ConvertedAmountARS { get; private set; }
         public Guid? ExchangeRateId { get; private set; }
+        public Guid? TransferGroupId { get; private set; }
+        public Guid? CounterpartyAccountId { get; private set; }
         public Guid? CategoryId { get; private set; }
         public DateTime TransactionDate { get; private set; }
         private Transaction() { }
 
-        public static Transaction Create(Guid accountId, decimal amount, string currency, TransactionType transactionType, string? description, decimal convertedAmountUSD, decimal convertedAmountARS, Guid? exchangeRateId, Guid? categoryId = null)
+        public static Transaction Create(Guid accountId, decimal amount, string currency, TransactionType transactionType, string? description, decimal convertedAmountUSD, decimal convertedAmountARS, Guid? exchangeRateId, Guid? categoryId = null, Guid? transferGroupId = null, Guid? counterpartyAccountId = null)
         {
             var normalizedCurrency = NormalizeCurrencyCode(currency, nameof(currency));
             var normalizedDescription = NormalizeDescription(description);
@@ -34,6 +36,12 @@ namespace ArgenCash.Domain.Entities
                 throw new ArgumentException("Exchange rate id cannot be empty.", nameof(exchangeRateId));
             if (categoryId == Guid.Empty)
                 throw new ArgumentException("Category id cannot be empty.", nameof(categoryId));
+            if (transferGroupId == Guid.Empty)
+                throw new ArgumentException("Transfer group id cannot be empty.", nameof(transferGroupId));
+            if (counterpartyAccountId == Guid.Empty)
+                throw new ArgumentException("Counterparty account id cannot be empty.", nameof(counterpartyAccountId));
+            if (counterpartyAccountId.HasValue && counterpartyAccountId.Value == accountId)
+                throw new ArgumentException("Counterparty account id must be different from account id.", nameof(counterpartyAccountId));
 
             return new Transaction
             {
@@ -46,6 +54,8 @@ namespace ArgenCash.Domain.Entities
                 ConvertedAmountUSD = convertedAmountUSD,
                 ConvertedAmountARS = convertedAmountARS,
                 ExchangeRateId = exchangeRateId,
+                TransferGroupId = transferGroupId,
+                CounterpartyAccountId = counterpartyAccountId,
                 CategoryId = categoryId,
                 TransactionDate = DateTime.UtcNow
             };

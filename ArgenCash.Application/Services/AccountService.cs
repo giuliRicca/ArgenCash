@@ -99,6 +99,72 @@ public class AccountService : IAccountService
         return transaction.Id;
     }
 
+    public async Task<Guid> CreateTransferAsync(Guid userId, CreateTransferRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (request.FromAccountId == request.ToAccountId)
+        {
+            throw new ArgumentException("Source and destination accounts must be different.", nameof(request.ToAccountId));
+        }
+
+        var fromAccount = await _accountRepository.GetForUpdateAsync(request.FromAccountId, userId, cancellationToken);
+        if (fromAccount is null)
+        {
+            throw new ArgumentException("Source account not found.", nameof(request.FromAccountId));
+        }
+
+        var toAccount = await _accountRepository.GetForUpdateAsync(request.ToAccountId, userId, cancellationToken);
+        if (toAccount is null)
+        {
+            throw new ArgumentException("Destination account not found.", nameof(request.ToAccountId));
+        }
+
+        var resolvedRate = await _exchangeRateResolver.ResolveAsync("USD", "ARS", fromAccount.ExchangeRateType, cancellationToken);
+
+        var convertedAmountUsd = request.Currency == "USD"
+            ? request.Amount
+            : request.Amount / resolvedRate.SellPrice;
+        var convertedAmountArs = request.Currency == "ARS"
+            ? request.Amount
+            : request.Amount * resolvedRate.BuyPrice;
+
+        var transferGroupId = Guid.NewGuid();
+        var baseDescription = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description;
+
+        var fromTransaction = Transaction.Create(
+            request.FromAccountId,
+            request.Amount,
+            request.Currency,
+            TransactionType.Expense,
+            baseDescription ?? $"Transfer to {toAccount.Name}",
+            convertedAmountUsd,
+            convertedAmountArs,
+            resolvedRate.Id,
+            null,
+            transferGroupId,
+            request.ToAccountId);
+
+        var toTransaction = Transaction.Create(
+            request.ToAccountId,
+            request.Amount,
+            request.Currency,
+            TransactionType.Income,
+            baseDescription ?? $"Transfer from {fromAccount.Name}",
+            convertedAmountUsd,
+            convertedAmountArs,
+            resolvedRate.Id,
+            null,
+            transferGroupId,
+            request.FromAccountId);
+
+        await _accountRepository.AddTransactionAsync(fromTransaction);
+        await _accountRepository.AddTransactionAsync(toTransaction);
+        await _accountRepository.SaveChangesAsync();
+
+        return transferGroupId;
+    }
+
     public async Task<bool> DeleteTransactionAsync(Guid transactionId, Guid userId, CancellationToken cancellationToken = default)
     {
         var transaction = await _accountRepository.GetTransactionByIdAsync(transactionId, userId, cancellationToken);
@@ -108,7 +174,23 @@ public class AccountService : IAccountService
             return false;
         }
 
-        await _accountRepository.DeleteTransactionAsync(transaction, cancellationToken);
+        if (transaction.TransferGroupId.HasValue)
+        {
+            var groupedTransactions = await _accountRepository.GetTransactionsByTransferGroupIdAsync(
+                transaction.TransferGroupId.Value,
+                userId,
+                cancellationToken);
+
+            foreach (var groupedTransaction in groupedTransactions)
+            {
+                await _accountRepository.DeleteTransactionAsync(groupedTransaction, cancellationToken);
+            }
+        }
+        else
+        {
+            await _accountRepository.DeleteTransactionAsync(transaction, cancellationToken);
+        }
+
         await _accountRepository.SaveChangesAsync();
 
         return true;
