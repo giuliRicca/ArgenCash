@@ -14,6 +14,7 @@ public static class DependencyInjection
         services.AddScoped<IExchangeRateResolver, ExchangeRateResolver>();
         services.AddScoped<IExchangeRateUsabilityPolicy, ExchangeRateUsabilityPolicy>();
         services.AddScoped<ICategoryService, CategoryService>();
+        services.AddScoped<IBudgetService, BudgetService>();
 
         return services;
     }
