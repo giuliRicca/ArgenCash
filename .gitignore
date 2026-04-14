@@ -43,6 +43,9 @@ CodeCoverage/
 .vs/
 *.vscode
 _temp_api_build/
+# Local environment files
+**/.env
+!**/.env.example
 # MSBuild Binary and Structured Log
 *.binlog
 
