@@ -1,5 +1,6 @@
 using ArgenCash.Application.Interfaces;
 using ArgenCash.Infrastructure.Authentication;
+using ArgenCash.Infrastructure.Email;
 using ArgenCash.Infrastructure.ExchangeRates;
 using ArgenCash.Infrastructure.Persistence;
 using ArgenCash.Infrastructure.Repositories;
@@ -32,6 +33,27 @@ public static class DependencyInjection
             .Validate(options => Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out _), "Exchange-rate API settings are invalid.")
             .ValidateOnStart();
 
+        services.AddOptions<VerificationTokenOptions>()
+            .Bind(configuration.GetSection(VerificationTokenOptions.SectionName))
+            .Validate(options =>
+                !string.IsNullOrWhiteSpace(options.SecretKey) &&
+                options.SecretKey.Length >= 32 &&
+                options.ExpirationMinutes > 0,
+                "Verification token settings are invalid.")
+            .ValidateOnStart();
+
+        services.AddOptions<SmtpOptions>()
+            .Bind(configuration.GetSection(SmtpOptions.SectionName))
+            .Validate(options =>
+                string.IsNullOrWhiteSpace(options.Host) || (
+                    options.Port > 0 &&
+                    !string.IsNullOrWhiteSpace(options.Username) &&
+                    !string.IsNullOrWhiteSpace(options.Password) &&
+                    !string.IsNullOrWhiteSpace(options.FromEmail)
+                ),
+                "SMTP settings are invalid.")
+            .ValidateOnStart();
+
         services.AddDbContext<ArgenCashDbContext>(options =>
             options.UseNpgsql(connectionString));
 
@@ -46,11 +68,13 @@ public static class DependencyInjection
 
         services.AddScoped<IAccountRepository, AccountRepository>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
+        services.AddScoped<IVerificationTokenService, VerificationTokenService>();
         services.AddScoped<IPasswordHasher, PasswordHasher>();
         services.AddScoped<IExchangeRateRepository, ExchangeRateRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<ICategoryRepository, CategoryRepository>();
         services.AddScoped<IBudgetRepository, BudgetRepository>();
+        services.AddScoped<IEmailSender, SmtpEmailSender>();
 
         return services;
     }

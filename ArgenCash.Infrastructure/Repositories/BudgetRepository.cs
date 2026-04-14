@@ -1,4 +1,3 @@
-using ArgenCash.Application.DTOs;
 using ArgenCash.Application.Interfaces;
 using ArgenCash.Domain.Entities;
 using ArgenCash.Infrastructure.Persistence;

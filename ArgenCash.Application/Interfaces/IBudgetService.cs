@@ -1,4 +1,3 @@
-using ArgenCash.Application.DTOs;
 
 namespace ArgenCash.Application.Interfaces;
 

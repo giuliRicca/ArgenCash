@@ -1,6 +1,5 @@
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
-using ArgenCash.Application.DTOs;
 using ArgenCash.Application.Interfaces;
 using ArgenCash.Domain.Entities;
 using Microsoft.Extensions.Caching.Memory;

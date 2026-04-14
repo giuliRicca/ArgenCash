@@ -1,6 +1,5 @@
 using ArgenCash.Application.Interfaces;
 using ArgenCash.Domain.Entities;
-using ArgenCash.Application.DTOs;
 using ArgenCash.Infrastructure.Persistence;
 
 using Microsoft.EntityFrameworkCore;

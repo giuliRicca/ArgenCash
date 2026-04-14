@@ -1,4 +1,3 @@
-using ArgenCash.Application.DTOs;
 using ArgenCash.Application.Interfaces;
 using ArgenCash.Domain.Entities;
 
@@ -58,6 +57,12 @@ public class AuthService : IAuthService
     {
         var user = await _userRepository.GetByIdAsync(userId);
         return user is null ? null : MapUser(user);
+    }
+
+    public async Task<bool> CheckUserExistsAsync(string email)
+    {
+        var user = await _userRepository.GetByEmailAsync(email);
+        return user is not null;
     }
 
     private AuthResponseDto CreateAuthResponse(User user)

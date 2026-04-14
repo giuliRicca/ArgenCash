@@ -1,4 +1,3 @@
-using ArgenCash.Application.DTOs;
 using ArgenCash.Application.Interfaces;
 using ArgenCash.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
