@@ -1,4 +1,3 @@
-using ArgenCash.Application.DTOs;
 using ArgenCash.Application.Interfaces;
 using ArgenCash.Domain.Entities;
 
@@ -7,11 +6,16 @@ namespace ArgenCash.Application.Services;
 public class AccountService : IAccountService
 {
     private readonly IAccountRepository _accountRepository;
+    private readonly ICategoryRepository _categoryRepository;
     private readonly IExchangeRateResolver _exchangeRateResolver;
 
-    public AccountService(IAccountRepository accountRepository, IExchangeRateResolver exchangeRateResolver)
+    public AccountService(
+        IAccountRepository accountRepository,
+        ICategoryRepository categoryRepository,
+        IExchangeRateResolver exchangeRateResolver)
     {
         _accountRepository = accountRepository;
+        _categoryRepository = categoryRepository;
         _exchangeRateResolver = exchangeRateResolver;
     }
 
@@ -97,6 +101,75 @@ public class AccountService : IAccountService
         await _accountRepository.SaveChangesAsync();
 
         return transaction.Id;
+    }
+
+    public async Task<bool> UpdateTransactionAsync(
+        Guid transactionId,
+        Guid userId,
+        UpdateTransactionRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var transaction = await _accountRepository.GetTransactionByIdAsync(transactionId, userId, cancellationToken);
+        if (transaction is null)
+        {
+            return false;
+        }
+
+        if (transaction.TransferGroupId.HasValue)
+        {
+            throw new ArgumentException("Transfers cannot be edited. Delete and recreate the transfer instead.", nameof(transactionId));
+        }
+
+        var account = await _accountRepository.GetForUpdateAsync(transaction.AccountId, userId, cancellationToken);
+        if (account is null)
+        {
+            throw new ArgumentException("Account not found.", nameof(transaction.AccountId));
+        }
+
+        if (request.CategoryId == Guid.Empty)
+        {
+            throw new ArgumentException("Category id cannot be empty.", nameof(request.CategoryId));
+        }
+
+        if (request.CategoryId.HasValue)
+        {
+            var category = await _categoryRepository.GetByIdAsync(request.CategoryId.Value, cancellationToken);
+            if (category is null)
+            {
+                throw new ArgumentException("Category not found.", nameof(request.CategoryId));
+            }
+
+            if (!category.IsSystem && category.UserId != userId)
+            {
+                throw new ArgumentException("Category does not belong to the current user.", nameof(request.CategoryId));
+            }
+
+            if (category.Type != transaction.TransactionType)
+            {
+                throw new ArgumentException("Category type must match transaction type.", nameof(request.CategoryId));
+            }
+        }
+
+        var resolvedRate = await _exchangeRateResolver.ResolveAsync("USD", "ARS", account.ExchangeRateType, cancellationToken);
+        var (convertedAmountUsd, convertedAmountArs) = CalculateConvertedAmounts(
+            request.Amount,
+            request.Currency,
+            resolvedRate.BuyPrice,
+            resolvedRate.SellPrice);
+
+        transaction.UpdateDetails(
+            request.Amount,
+            request.Currency,
+            request.CategoryId,
+            convertedAmountUsd,
+            convertedAmountArs,
+            resolvedRate.Id);
+
+        await _accountRepository.SaveChangesAsync();
+
+        return true;
     }
 
     public async Task<Guid> CreateTransferAsync(Guid userId, CreateTransferRequest request, CancellationToken cancellationToken = default)
@@ -243,6 +316,27 @@ public class AccountService : IAccountService
             BalanceUsd = account.BalanceUsd,
             BalanceArs = account.BalanceArs,
             Transactions = account.Transactions
+        };
+    }
+
+    private static (decimal convertedAmountUsd, decimal convertedAmountArs) CalculateConvertedAmounts(
+        decimal amount,
+        string currency,
+        decimal buyRate,
+        decimal sellRate)
+    {
+        if (string.IsNullOrWhiteSpace(currency))
+        {
+            throw new ArgumentException("Currency is required.", nameof(currency));
+        }
+
+        var normalizedCurrency = currency.Trim().ToUpperInvariant();
+
+        return normalizedCurrency switch
+        {
+            "USD" => (amount, amount * buyRate),
+            "ARS" => (amount / sellRate, amount),
+            _ => throw new ArgumentException("Currency must be USD or ARS.", nameof(currency)),
         };
     }
 }

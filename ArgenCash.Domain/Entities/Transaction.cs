@@ -61,6 +61,35 @@ namespace ArgenCash.Domain.Entities
             };
         }
 
+        public void UpdateDetails(
+            decimal amount,
+            string currency,
+            Guid? categoryId,
+            decimal convertedAmountUSD,
+            decimal convertedAmountARS,
+            Guid? exchangeRateId)
+        {
+            var normalizedCurrency = NormalizeCurrencyCode(currency, nameof(currency));
+
+            if (amount <= 0)
+                throw new ArgumentException("Amount must be greater than zero.", nameof(amount));
+            if (convertedAmountUSD <= 0)
+                throw new ArgumentException("Converted USD amount must be greater than zero.", nameof(convertedAmountUSD));
+            if (convertedAmountARS <= 0)
+                throw new ArgumentException("Converted ARS amount must be greater than zero.", nameof(convertedAmountARS));
+            if (exchangeRateId == Guid.Empty)
+                throw new ArgumentException("Exchange rate id cannot be empty.", nameof(exchangeRateId));
+            if (categoryId == Guid.Empty)
+                throw new ArgumentException("Category id cannot be empty.", nameof(categoryId));
+
+            Amount = amount;
+            Currency = normalizedCurrency;
+            CategoryId = categoryId;
+            ConvertedAmountUSD = convertedAmountUSD;
+            ConvertedAmountARS = convertedAmountARS;
+            ExchangeRateId = exchangeRateId;
+        }
+
         private static string NormalizeCurrencyCode(string currencyCode, string parameterName)
         {
             if (string.IsNullOrWhiteSpace(currencyCode))

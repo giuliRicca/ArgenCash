@@ -1,4 +1,3 @@
-using ArgenCash.Application.DTOs;
 using ArgenCash.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -46,6 +45,25 @@ public class TransactionsController : ApiControllerBase
 
         var deleted = await _accountService.DeleteTransactionAsync(id, userId, cancellationToken);
         return deleted ? NoContent() : NotFound();
+    }
+
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateTransactionRequest request, CancellationToken cancellationToken = default)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
+        try
+        {
+            var updated = await _accountService.UpdateTransactionAsync(id, userId, request, cancellationToken);
+            return updated ? NoContent() : NotFound();
+        }
+        catch (ArgumentException ex)
+        {
+            return ValidationProblem(detail: ex.Message);
+        }
     }
 
 }
