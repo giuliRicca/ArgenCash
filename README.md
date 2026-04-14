@@ -29,7 +29,7 @@ This API is built using **Clean Architecture** (Domain-Driven Design principles)
 ## 🛠️ Getting Started
 
 ### Prerequisites
-* .NET 8 SDK or later
+* .NET 10 SDK or later
 * PostgreSQL 15+
 * Docker (Optional, for database containerization)
 
