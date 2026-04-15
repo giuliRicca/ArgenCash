@@ -1,0 +1,155 @@
+name: Deploy Backend to MonsterASP
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-monsterasp-backend
+  cancel-in-progress: false
+
+env:
+  DOTNET_VERSION: "10.0.x"
+  PROJECT_PATH: "ArgenCash.Api/ArgenCash.Api.csproj"
+  PUBLISH_DIR: "${{ github.workspace }}/publish"
+
+jobs:
+  deploy:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Validate required secrets
+        shell: pwsh
+        env:
+          ARGENCASH_DB_CONNECTION: ${{ secrets.ARGENCASH_DB_CONNECTION }}
+          ARGENCASH_JWT_SECRET: ${{ secrets.ARGENCASH_JWT_SECRET }}
+          ARGENCASH_VERIFICATION_TOKEN_SECRET: ${{ secrets.ARGENCASH_VERIFICATION_TOKEN_SECRET }}
+          ARGENCASH_SMTP_USERNAME: ${{ secrets.ARGENCASH_SMTP_USERNAME }}
+          ARGENCASH_SMTP_PASSWORD: ${{ secrets.ARGENCASH_SMTP_PASSWORD }}
+          ARGENCASH_SMTP_FROM_EMAIL: ${{ secrets.ARGENCASH_SMTP_FROM_EMAIL }}
+          MONSTERASP_FTP_SERVER: ${{ secrets.MONSTERASP_FTP_SERVER }}
+          MONSTERASP_FTP_USERNAME: ${{ secrets.MONSTERASP_FTP_USERNAME }}
+          MONSTERASP_FTP_PASSWORD: ${{ secrets.MONSTERASP_FTP_PASSWORD }}
+          MONSTERASP_FTP_TARGET_DIR: ${{ secrets.MONSTERASP_FTP_TARGET_DIR }}
+        run: |
+          $required = @(
+            'ARGENCASH_DB_CONNECTION',
+            'ARGENCASH_JWT_SECRET',
+            'ARGENCASH_VERIFICATION_TOKEN_SECRET',
+            'ARGENCASH_SMTP_USERNAME',
+            'ARGENCASH_SMTP_PASSWORD',
+            'ARGENCASH_SMTP_FROM_EMAIL',
+            'MONSTERASP_FTP_SERVER',
+            'MONSTERASP_FTP_USERNAME',
+            'MONSTERASP_FTP_PASSWORD',
+            'MONSTERASP_FTP_TARGET_DIR'
+          )
+
+          $missing = @()
+          foreach ($name in $required) {
+            $value = [Environment]::GetEnvironmentVariable($name)
+            if ([string]::IsNullOrWhiteSpace($value)) {
+              $missing += $name
+            }
+          }
+
+          if ($missing.Count -gt 0) {
+            Write-Host "Missing required secrets: $($missing -join ', ')"
+            exit 1
+          }
+
+      - name: Restore
+        run: dotnet restore "${{ env.PROJECT_PATH }}"
+
+      - name: Publish self-contained build (win-x64)
+        run: dotnet publish "${{ env.PROJECT_PATH }}" -c Release -r win-x64 --self-contained true -o "${{ env.PUBLISH_DIR }}"
+
+      - name: Create appsettings.Production.json
+        shell: pwsh
+        env:
+          ARGENCASH_DB_CONNECTION: ${{ secrets.ARGENCASH_DB_CONNECTION }}
+          ARGENCASH_JWT_SECRET: ${{ secrets.ARGENCASH_JWT_SECRET }}
+          ARGENCASH_VERIFICATION_TOKEN_SECRET: ${{ secrets.ARGENCASH_VERIFICATION_TOKEN_SECRET }}
+          ARGENCASH_SMTP_USERNAME: ${{ secrets.ARGENCASH_SMTP_USERNAME }}
+          ARGENCASH_SMTP_PASSWORD: ${{ secrets.ARGENCASH_SMTP_PASSWORD }}
+          ARGENCASH_SMTP_FROM_EMAIL: ${{ secrets.ARGENCASH_SMTP_FROM_EMAIL }}
+          ARGENCASH_FRONTEND_URL: ${{ secrets.ARGENCASH_FRONTEND_URL }}
+          ARGENCASH_ALLOWED_ORIGIN_0: ${{ secrets.ARGENCASH_ALLOWED_ORIGIN_0 }}
+          ARGENCASH_JWT_ISSUER: ${{ secrets.ARGENCASH_JWT_ISSUER }}
+          ARGENCASH_JWT_AUDIENCE: ${{ secrets.ARGENCASH_JWT_AUDIENCE }}
+          ARGENCASH_SMTP_HOST: ${{ secrets.ARGENCASH_SMTP_HOST }}
+          ARGENCASH_SMTP_PORT: ${{ secrets.ARGENCASH_SMTP_PORT }}
+          ARGENCASH_SMTP_FROM_NAME: ${{ secrets.ARGENCASH_SMTP_FROM_NAME }}
+          ARGENCASH_EXCHANGE_RATE_API_BASE_URL: ${{ secrets.ARGENCASH_EXCHANGE_RATE_API_BASE_URL }}
+          ARGENCASH_EXCHANGE_RATE_SOURCE_NAME: ${{ secrets.ARGENCASH_EXCHANGE_RATE_SOURCE_NAME }}
+          ARGENCASH_VERIFICATION_TOKEN_EXPIRATION_MINUTES: ${{ secrets.ARGENCASH_VERIFICATION_TOKEN_EXPIRATION_MINUTES }}
+          ARGENCASH_JWT_EXPIRATION_MINUTES: ${{ secrets.ARGENCASH_JWT_EXPIRATION_MINUTES }}
+        run: |
+          $allowedOrigin = if ([string]::IsNullOrWhiteSpace($env:ARGENCASH_ALLOWED_ORIGIN_0)) { 'https://your-frontend-domain.com' } else { $env:ARGENCASH_ALLOWED_ORIGIN_0 }
+          $frontendUrl = if ([string]::IsNullOrWhiteSpace($env:ARGENCASH_FRONTEND_URL)) { $allowedOrigin } else { $env:ARGENCASH_FRONTEND_URL }
+
+          $smtpHost = if ([string]::IsNullOrWhiteSpace($env:ARGENCASH_SMTP_HOST)) { 'smtp.gmail.com' } else { $env:ARGENCASH_SMTP_HOST }
+          $smtpPort = if ([string]::IsNullOrWhiteSpace($env:ARGENCASH_SMTP_PORT)) { 587 } else { [int]$env:ARGENCASH_SMTP_PORT }
+          $smtpFromName = if ([string]::IsNullOrWhiteSpace($env:ARGENCASH_SMTP_FROM_NAME)) { 'ArgenCash' } else { $env:ARGENCASH_SMTP_FROM_NAME }
+
+          $jwtIssuer = if ([string]::IsNullOrWhiteSpace($env:ARGENCASH_JWT_ISSUER)) { 'ArgenCash.Api' } else { $env:ARGENCASH_JWT_ISSUER }
+          $jwtAudience = if ([string]::IsNullOrWhiteSpace($env:ARGENCASH_JWT_AUDIENCE)) { 'ArgenCash.Frontend' } else { $env:ARGENCASH_JWT_AUDIENCE }
+          $jwtExpiration = if ([string]::IsNullOrWhiteSpace($env:ARGENCASH_JWT_EXPIRATION_MINUTES)) { 60 } else { [int]$env:ARGENCASH_JWT_EXPIRATION_MINUTES }
+          $verificationExpiration = if ([string]::IsNullOrWhiteSpace($env:ARGENCASH_VERIFICATION_TOKEN_EXPIRATION_MINUTES)) { 15 } else { [int]$env:ARGENCASH_VERIFICATION_TOKEN_EXPIRATION_MINUTES }
+
+          $exchangeBaseUrl = if ([string]::IsNullOrWhiteSpace($env:ARGENCASH_EXCHANGE_RATE_API_BASE_URL)) { 'https://dolarapi.com/' } else { $env:ARGENCASH_EXCHANGE_RATE_API_BASE_URL }
+          $exchangeSource = if ([string]::IsNullOrWhiteSpace($env:ARGENCASH_EXCHANGE_RATE_SOURCE_NAME)) { 'dolarapi.com' } else { $env:ARGENCASH_EXCHANGE_RATE_SOURCE_NAME }
+
+          $config = [ordered]@{
+            ConnectionStrings = [ordered]@{
+              DefaultConnection = $env:ARGENCASH_DB_CONNECTION
+            }
+            Jwt = [ordered]@{
+              Issuer = $jwtIssuer
+              Audience = $jwtAudience
+              SecretKey = $env:ARGENCASH_JWT_SECRET
+              ExpirationMinutes = $jwtExpiration
+            }
+            VerificationToken = [ordered]@{
+              SecretKey = $env:ARGENCASH_VERIFICATION_TOKEN_SECRET
+              ExpirationMinutes = $verificationExpiration
+              Issuer = $jwtIssuer
+            }
+            Smtp = [ordered]@{
+              Host = $smtpHost
+              Port = $smtpPort
+              Username = $env:ARGENCASH_SMTP_USERNAME
+              Password = $env:ARGENCASH_SMTP_PASSWORD
+              FromName = $smtpFromName
+              FromEmail = $env:ARGENCASH_SMTP_FROM_EMAIL
+            }
+            FrontendUrl = $frontendUrl
+            ExchangeRateApi = [ordered]@{
+              BaseUrl = $exchangeBaseUrl
+              SourceName = $exchangeSource
+            }
+            AllowedOrigins = @($allowedOrigin)
+          }
+
+          $outFile = Join-Path "${{ env.PUBLISH_DIR }}" "appsettings.Production.json"
+          $json = $config | ConvertTo-Json -Depth 8
+          [System.IO.File]::WriteAllText($outFile, $json, [System.Text.UTF8Encoding]::new($false))
+
+      - name: Deploy published output to MonsterASP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.MONSTERASP_FTP_SERVER }}
+          username: ${{ secrets.MONSTERASP_FTP_USERNAME }}
+          password: ${{ secrets.MONSTERASP_FTP_PASSWORD }}
+          server-dir: ${{ secrets.MONSTERASP_FTP_TARGET_DIR }}
+          local-dir: ${{ env.PUBLISH_DIR }}/
+          dangerous-clean-slate: false
