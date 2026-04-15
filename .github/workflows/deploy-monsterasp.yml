@@ -71,7 +71,7 @@ jobs:
         run: dotnet restore "${{ env.PROJECT_PATH }}"
 
       - name: Publish self-contained build (win-x64)
-        run: dotnet publish "${{ env.PROJECT_PATH }}" -c Release -r win-x64 --self-contained true -o "${{ env.PUBLISH_DIR }}"
+        run: dotnet publish "${{ env.PROJECT_PATH }}" -c Release -r win-x64 --self-contained true -o "${{ env.PUBLISH_DIR }}" /p:UseAppHost=true
 
       - name: Create appsettings.Production.json
         shell: pwsh
