@@ -1,0 +1,14 @@
+global using ArgenCash.Application.DTOs.Accounts.Requests;
+global using ArgenCash.Application.DTOs.Accounts.Responses;
+global using ArgenCash.Application.DTOs.Accounts.Snapshots;
+global using ArgenCash.Application.DTOs.Auth.Requests;
+global using ArgenCash.Application.DTOs.Auth.Responses;
+global using ArgenCash.Application.DTOs.Budgets.Requests;
+global using ArgenCash.Application.DTOs.Budgets.Responses;
+global using ArgenCash.Application.DTOs.Budgets.Snapshots;
+global using ArgenCash.Application.DTOs.Categories.Requests;
+global using ArgenCash.Application.DTOs.Categories.Responses;
+global using ArgenCash.Application.DTOs.ExchangeRates.Requests;
+global using ArgenCash.Application.DTOs.ExchangeRates.Responses;
+global using ArgenCash.Application.DTOs.Transactions.Requests;
+global using ArgenCash.Application.DTOs.Transactions.Responses;

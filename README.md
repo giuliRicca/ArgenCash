@@ -1,39 +1,96 @@
-# 🌐 ArgenCash Ledger API 
+# ArgenCash Backend API
 
 ![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?style=for-the-badge&logo=dotnet)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql)
 ![Architecture](https://img.shields.io/badge/Architecture-Clean-success?style=for-the-badge)
 
-A high-performance, multi-currency financial ledger designed specifically for dual-currency economies and volatile exchange markets.
+## Why this project exists
 
-## 📖 The Business Problem
-Standard personal finance applications fail in high-inflation or dual-currency environments (like Argentina) because they assume a stable, single-rate exchange system. Users earning in a hard currency (USD) but transacting in a local currency (ARS) face "hidden inflation" and require a system that understands the gap between official and parallel market rates.
+Most personal finance apps assume one stable currency. ArgenCash is designed for volatile, dual-currency environments where users need to preserve historical value context, compare rate sources, and avoid distorted portfolio reporting.
 
-ArgenCash solves this by implementing a **Forex-Aware Double-Entry Ledger**. It tracks the exact historical exchange rate at the microsecond a transaction occurs, ensuring that a user's true net worth is never skewed by future currency devaluations.
+## Tech stack
 
-## 🚀 Core Fintech Features
-* **Multi-Rate Triangulation:** Supports concurrent exchange rates for a single currency pair (e.g., Official, Blue, and MEP rates).
-* **Snapshot Pattern:** Transactions are immutable. Historical ARS expenses retain their exact USD value from the day they were executed, preventing historical data mutation.
-* **Financial Precision:** 100% eradication of floating-point truncation errors by utilizing `numeric(19,4)` and the Money Pattern across the entire stack.
-* **Idempotency:** Core transaction endpoints utilize Idempotency Keys to safely handle network drops and prevent double-charging from frontend retries.
-* **Automated Data Sync:** Implements background workers to fetch market rates periodically without blocking the main transaction threads.
+- .NET 10, ASP.NET Core Web API
+- Entity Framework Core + PostgreSQL
+- JWT authentication
+- Clean Architecture (`Api`, `Application`, `Domain`, `Infrastructure`)
 
-## 🏗️ Architecture
-This API is built using **Clean Architecture** (Domain-Driven Design principles) to enforce a strict separation of concerns, ensuring the financial domain logic is entirely isolated from web frameworks and database providers.
+## Core capabilities
 
-* **Presentation:** ASP.NET Core Web API
-* **Application:** CQRS pattern, FluentValidation
-* **Domain:** Rich enterprise entities, Custom Exceptions
-* **Infrastructure:** Entity Framework Core, PostgreSQL, external API integrations (DolarApi)
+- User auth (`register`, `login`, `me`) with JWT
+- Account management with exchange-rate profile support
+- Transaction and transfer workflows for ledger tracking
+- Category and budget endpoints for spending structure
+- Live exchange rate endpoints (`/api/exchangerates/live`, `/api/exchangerates/live/batch`)
 
-## 🛠️ Getting Started
+## Project structure
+
+- `ArgenCash.Api`: HTTP layer, auth middleware, Swagger, DI wiring
+- `ArgenCash.Application`: use cases, contracts, DTOs, service orchestration
+- `ArgenCash.Domain`: business entities and invariants
+- `ArgenCash.Infrastructure`: EF Core persistence, auth providers, external integrations
+
+## Local setup
 
 ### Prerequisites
-* .NET 10 SDK or later
-* PostgreSQL 15+
-* Docker (Optional, for database containerization)
 
-### Local Setup
-1. Clone the repository:
-   ```bash
-   git clone [https://github.com/giuliRicca/ArgenCash.git](https://github.com/giuliRicca/ArgenCash.git)
+- .NET SDK 10+
+- PostgreSQL 15+
+
+### 1) Configure environment
+
+At minimum, configure these settings (environment variables or `appsettings.Development.json`):
+
+- `ConnectionStrings__DefaultConnection`
+- `Jwt__Issuer`, `Jwt__Audience`, `Jwt__SecretKey`, `Jwt__ExpirationMinutes`
+- `VerificationToken__SecretKey`, `VerificationToken__ExpirationMinutes`, `VerificationToken__Issuer`
+- `ExchangeRateApi__BaseUrl`, `ExchangeRateApi__SourceName`
+- `AllowedOrigins__0`
+
+For email verification flows, also set SMTP settings:
+
+- `Smtp__Host`, `Smtp__Port`, `Smtp__Username`, `Smtp__Password`, `Smtp__FromName`, `Smtp__FromEmail`
+
+### 2) Restore and run
+
+```bash
+dotnet restore "ArgenCash.slnx"
+dotnet ef database update --project "ArgenCash.Infrastructure/ArgenCash.Infrastructure.csproj" --startup-project "ArgenCash.Api/ArgenCash.Api.csproj"
+dotnet run --project "ArgenCash.Api/ArgenCash.Api.csproj"
+```
+
+Default local API URL: `http://localhost:5018`
+
+### 3) Open API docs
+
+Swagger UI is available in development at:
+
+- `http://localhost:5018/swagger`
+
+## Developer commands
+
+```bash
+dotnet build "ArgenCash.slnx"
+dotnet test
+```
+
+Note: there are currently no automated test projects in this repository, so `dotnet test` will return without running tests.
+
+## Docker
+
+The repository includes a production-oriented `Dockerfile`.
+
+```bash
+docker build -t argencash-backend .
+docker run --rm -p 8080:8080 argencash-backend
+```
+
+## Security and public repo notes
+
+- Do not commit real `.env` files, SMTP passwords, JWT secrets, or production connection strings.
+- Rotate any local secrets used during development before going public.
+- Prefer storing secrets in environment variables or a secret manager.
+
+## License
+
+This project is licensed under the MIT License. See `LICENSE`.

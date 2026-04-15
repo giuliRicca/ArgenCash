@@ -1,0 +1,342 @@
+using ArgenCash.Application.Interfaces;
+using ArgenCash.Domain.Entities;
+
+namespace ArgenCash.Application.Services;
+
+public class AccountService : IAccountService
+{
+    private readonly IAccountRepository _accountRepository;
+    private readonly ICategoryRepository _categoryRepository;
+    private readonly IExchangeRateResolver _exchangeRateResolver;
+
+    public AccountService(
+        IAccountRepository accountRepository,
+        ICategoryRepository categoryRepository,
+        IExchangeRateResolver exchangeRateResolver)
+    {
+        _accountRepository = accountRepository;
+        _categoryRepository = categoryRepository;
+        _exchangeRateResolver = exchangeRateResolver;
+    }
+
+    public async Task<Guid> CreateAccountAsync(Guid userId, CreateAccountRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var account = Account.Create(request.Name, request.CurrencyCode, userId);
+
+        await _accountRepository.AddAsync(account);
+        await _accountRepository.SaveChangesAsync();
+
+        return account.Id;
+    }
+
+    public async Task<bool> UpdateAccountAsync(Guid userId, Guid accountId, UpdateAccountRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var account = await _accountRepository.GetForUpdateAsync(accountId, userId, cancellationToken);
+
+        if (account is null)
+        {
+            return false;
+        }
+
+        var hasNameUpdate = !string.IsNullOrWhiteSpace(request.Name);
+        var hasExchangeRateTypeUpdate = request.ExchangeRateType.HasValue;
+
+        if (!hasNameUpdate && !hasExchangeRateTypeUpdate)
+        {
+            throw new ArgumentException("At least one account field must be provided.", nameof(request));
+        }
+
+        if (hasNameUpdate)
+        {
+            account.Rename(request.Name!);
+        }
+
+        if (hasExchangeRateTypeUpdate)
+        {
+            account.SetExchangeRateType(request.ExchangeRateType!.Value);
+        }
+
+        await _accountRepository.SaveChangesAsync();
+
+        return true;
+    }
+
+    public async Task<Guid> CreateTransactionAsync(Guid userId, CreateTransactionRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var account = await _accountRepository.GetForUpdateAsync(request.AccountId, userId, cancellationToken);
+        if (account is null)
+        {
+            throw new ArgumentException("Account not found.", nameof(request.AccountId));
+        }
+
+        var resolvedRate = await _exchangeRateResolver.ResolveAsync("USD", "ARS", account.ExchangeRateType, cancellationToken);
+        var convertedAmountUSD = request.Currency == "USD"
+            ? request.Amount
+            : request.Amount / resolvedRate.SellPrice;
+        var convertedAmountARS = request.Currency == "ARS"
+            ? request.Amount
+            : request.Amount * resolvedRate.BuyPrice;
+
+        var transactionType = TransactionTypes.ToEnum(request.TransactionType);
+
+        var transaction = Transaction.Create(
+            request.AccountId,
+            request.Amount,
+            request.Currency,
+            transactionType,
+            request.Description,
+            convertedAmountUSD,
+            convertedAmountARS,
+            resolvedRate.Id,
+            request.CategoryId
+        );
+
+        await _accountRepository.AddTransactionAsync(transaction);
+        await _accountRepository.SaveChangesAsync();
+
+        return transaction.Id;
+    }
+
+    public async Task<bool> UpdateTransactionAsync(
+        Guid transactionId,
+        Guid userId,
+        UpdateTransactionRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var transaction = await _accountRepository.GetTransactionByIdAsync(transactionId, userId, cancellationToken);
+        if (transaction is null)
+        {
+            return false;
+        }
+
+        if (transaction.TransferGroupId.HasValue)
+        {
+            throw new ArgumentException("Transfers cannot be edited. Delete and recreate the transfer instead.", nameof(transactionId));
+        }
+
+        var account = await _accountRepository.GetForUpdateAsync(transaction.AccountId, userId, cancellationToken);
+        if (account is null)
+        {
+            throw new ArgumentException("Account not found.", nameof(transaction.AccountId));
+        }
+
+        if (request.CategoryId == Guid.Empty)
+        {
+            throw new ArgumentException("Category id cannot be empty.", nameof(request.CategoryId));
+        }
+
+        if (request.CategoryId.HasValue)
+        {
+            var category = await _categoryRepository.GetByIdAsync(request.CategoryId.Value, cancellationToken);
+            if (category is null)
+            {
+                throw new ArgumentException("Category not found.", nameof(request.CategoryId));
+            }
+
+            if (!category.IsSystem && category.UserId != userId)
+            {
+                throw new ArgumentException("Category does not belong to the current user.", nameof(request.CategoryId));
+            }
+
+            if (category.Type != transaction.TransactionType)
+            {
+                throw new ArgumentException("Category type must match transaction type.", nameof(request.CategoryId));
+            }
+        }
+
+        var resolvedRate = await _exchangeRateResolver.ResolveAsync("USD", "ARS", account.ExchangeRateType, cancellationToken);
+        var (convertedAmountUsd, convertedAmountArs) = CalculateConvertedAmounts(
+            request.Amount,
+            request.Currency,
+            resolvedRate.BuyPrice,
+            resolvedRate.SellPrice);
+
+        transaction.UpdateDetails(
+            request.Amount,
+            request.Currency,
+            request.CategoryId,
+            convertedAmountUsd,
+            convertedAmountArs,
+            resolvedRate.Id);
+
+        await _accountRepository.SaveChangesAsync();
+
+        return true;
+    }
+
+    public async Task<Guid> CreateTransferAsync(Guid userId, CreateTransferRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (request.FromAccountId == request.ToAccountId)
+        {
+            throw new ArgumentException("Source and destination accounts must be different.", nameof(request.ToAccountId));
+        }
+
+        var fromAccount = await _accountRepository.GetForUpdateAsync(request.FromAccountId, userId, cancellationToken);
+        if (fromAccount is null)
+        {
+            throw new ArgumentException("Source account not found.", nameof(request.FromAccountId));
+        }
+
+        var toAccount = await _accountRepository.GetForUpdateAsync(request.ToAccountId, userId, cancellationToken);
+        if (toAccount is null)
+        {
+            throw new ArgumentException("Destination account not found.", nameof(request.ToAccountId));
+        }
+
+        var resolvedRate = await _exchangeRateResolver.ResolveAsync("USD", "ARS", fromAccount.ExchangeRateType, cancellationToken);
+
+        var convertedAmountUsd = request.Currency == "USD"
+            ? request.Amount
+            : request.Amount / resolvedRate.SellPrice;
+        var convertedAmountArs = request.Currency == "ARS"
+            ? request.Amount
+            : request.Amount * resolvedRate.BuyPrice;
+
+        var transferGroupId = Guid.NewGuid();
+        var baseDescription = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description;
+
+        var fromTransaction = Transaction.Create(
+            request.FromAccountId,
+            request.Amount,
+            request.Currency,
+            TransactionType.Expense,
+            baseDescription ?? $"Transfer to {toAccount.Name}",
+            convertedAmountUsd,
+            convertedAmountArs,
+            resolvedRate.Id,
+            null,
+            transferGroupId,
+            request.ToAccountId);
+
+        var toTransaction = Transaction.Create(
+            request.ToAccountId,
+            request.Amount,
+            request.Currency,
+            TransactionType.Income,
+            baseDescription ?? $"Transfer from {fromAccount.Name}",
+            convertedAmountUsd,
+            convertedAmountArs,
+            resolvedRate.Id,
+            null,
+            transferGroupId,
+            request.FromAccountId);
+
+        await _accountRepository.AddTransactionAsync(fromTransaction);
+        await _accountRepository.AddTransactionAsync(toTransaction);
+        await _accountRepository.SaveChangesAsync();
+
+        return transferGroupId;
+    }
+
+    public async Task<bool> DeleteTransactionAsync(Guid transactionId, Guid userId, CancellationToken cancellationToken = default)
+    {
+        var transaction = await _accountRepository.GetTransactionByIdAsync(transactionId, userId, cancellationToken);
+
+        if (transaction is null)
+        {
+            return false;
+        }
+
+        if (transaction.TransferGroupId.HasValue)
+        {
+            var groupedTransactions = await _accountRepository.GetTransactionsByTransferGroupIdAsync(
+                transaction.TransferGroupId.Value,
+                userId,
+                cancellationToken);
+
+            foreach (var groupedTransaction in groupedTransactions)
+            {
+                await _accountRepository.DeleteTransactionAsync(groupedTransaction, cancellationToken);
+            }
+        }
+        else
+        {
+            await _accountRepository.DeleteTransactionAsync(transaction, cancellationToken);
+        }
+
+        await _accountRepository.SaveChangesAsync();
+
+        return true;
+    }
+
+    public async Task<AccountDto?> GetAccountByIdAsync(Guid id, Guid userId)
+    {
+        var account = await _accountRepository.GetByIdAsync(id, userId);
+
+        return account is null ? null : Map(account);
+    }
+
+    public async Task<AccountDetailDto?> GetAccountDetailByIdAsync(Guid id, Guid userId)
+    {
+        var account = await _accountRepository.GetDetailByIdAsync(id, userId);
+
+        return account is null ? null : MapDetail(account);
+    }
+
+    public async Task<IEnumerable<AccountDto>> GetAllAccountsAsync(Guid userId)
+    {
+        var accounts = await _accountRepository.GetAllAsync(userId);
+
+        return accounts.Select(account => Map(account)).ToList();
+    }
+
+    private static AccountDto Map(AccountBalanceSnapshot account)
+    {
+        return new AccountDto
+        {
+            Id = account.Id,
+            Name = account.Name,
+            CurrencyCode = account.CurrencyCode,
+            ExchangeRateType = ExchangeRateTypes.ToString(account.ExchangeRateType),
+            BalanceInAccountCurrency = account.BalanceInAccountCurrency,
+            BalanceUsd = account.BalanceUsd,
+            BalanceArs = account.BalanceArs
+        };
+    }
+
+    private static AccountDetailDto MapDetail(AccountDetailSnapshot account)
+    {
+        return new AccountDetailDto
+        {
+            Id = account.Id,
+            Name = account.Name,
+            CurrencyCode = account.CurrencyCode,
+            ExchangeRateType = ExchangeRateTypes.ToString(account.ExchangeRateType),
+            BalanceInAccountCurrency = account.BalanceInAccountCurrency,
+            BalanceUsd = account.BalanceUsd,
+            BalanceArs = account.BalanceArs,
+            Transactions = account.Transactions
+        };
+    }
+
+    private static (decimal convertedAmountUsd, decimal convertedAmountArs) CalculateConvertedAmounts(
+        decimal amount,
+        string currency,
+        decimal buyRate,
+        decimal sellRate)
+    {
+        if (string.IsNullOrWhiteSpace(currency))
+        {
+            throw new ArgumentException("Currency is required.", nameof(currency));
+        }
+
+        var normalizedCurrency = currency.Trim().ToUpperInvariant();
+
+        return normalizedCurrency switch
+        {
+            "USD" => (amount, amount * buyRate),
+            "ARS" => (amount / sellRate, amount),
+            _ => throw new ArgumentException("Currency must be USD or ARS.", nameof(currency)),
+        };
+    }
+}

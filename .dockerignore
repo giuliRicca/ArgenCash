@@ -1,0 +1,11 @@
+.git
+.github
+.vs
+bin
+obj
+**/bin
+**/obj
+_temp_api_build
+*.user
+*.suo
+*.tmp
