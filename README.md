@@ -1,6 +1,8 @@
 # ArgenCash Backend API
 
-Backend service for ArgenCash, a personal finance platform focused on USD/ARS multi-currency operations, exchange-rate-aware accounting, and transaction traceability.
+![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?style=for-the-badge&logo=dotnet)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql)
+![Architecture](https://img.shields.io/badge/Architecture-Clean-success?style=for-the-badge)
 
 ## Why this project exists
 
