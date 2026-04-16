@@ -9,6 +9,7 @@ using ArgenCash.Infrastructure;
 using ArgenCash.Infrastructure.Authentication;
 
 LoadDotEnvVariables();
+NormalizeArgenCashEnvironmentVariables();
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -150,42 +151,101 @@ app.Run();
 
 static void LoadDotEnvVariables()
 {
-    var dotenvPath = Path.Combine(Directory.GetCurrentDirectory(), ".env");
-
-    if (!File.Exists(dotenvPath))
+    foreach (var dotenvPath in ResolveDotEnvPaths())
     {
-        return;
+        if (!File.Exists(dotenvPath))
+        {
+            continue;
+        }
+
+        foreach (var rawLine in File.ReadAllLines(dotenvPath))
+        {
+            var line = rawLine.Trim();
+
+            if (line.Length == 0 || line.StartsWith("#", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var separatorIndex = line.IndexOf('=');
+            if (separatorIndex <= 0)
+            {
+                continue;
+            }
+
+            var key = line[..separatorIndex].Trim();
+            var value = line[(separatorIndex + 1)..].Trim();
+
+            if (value.Length >= 2 &&
+                ((value.StartsWith('"') && value.EndsWith('"')) || (value.StartsWith('\'') && value.EndsWith('\''))))
+            {
+                value = value[1..^1];
+            }
+
+            if (string.IsNullOrWhiteSpace(key) || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable(key)))
+            {
+                continue;
+            }
+
+            Environment.SetEnvironmentVariable(key, value);
+        }
+    }
+}
+
+static IReadOnlyCollection<string> ResolveDotEnvPaths()
+{
+    var currentDirectory = Directory.GetCurrentDirectory();
+    var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        Path.Combine(currentDirectory, ".env")
+    };
+
+    var directory = new DirectoryInfo(currentDirectory);
+    while (directory is not null && !string.Equals(directory.Name, "Backend", StringComparison.OrdinalIgnoreCase))
+    {
+        directory = directory.Parent;
     }
 
-    foreach (var rawLine in File.ReadAllLines(dotenvPath))
+    if (directory is not null)
     {
-        var line = rawLine.Trim();
+        paths.Add(Path.Combine(directory.FullName, ".env"));
+        paths.Add(Path.Combine(directory.FullName, "ArgenCash.Api", ".env"));
+    }
 
-        if (line.Length == 0 || line.StartsWith("#", StringComparison.Ordinal))
+    return paths;
+}
+
+static void NormalizeArgenCashEnvironmentVariables()
+{
+    var mappings = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["ARGENCASH_DB_CONNECTION"] = "ConnectionStrings__DefaultConnection",
+        ["ARGENCASH_JWT_ISSUER"] = "Jwt__Issuer",
+        ["ARGENCASH_JWT_AUDIENCE"] = "Jwt__Audience",
+        ["ARGENCASH_JWT_SECRET"] = "Jwt__SecretKey",
+        ["ARGENCASH_JWT_EXPIRATION_MINUTES"] = "Jwt__ExpirationMinutes",
+        ["ARGENCASH_VERIFICATION_TOKEN_SECRET"] = "VerificationToken__SecretKey",
+        ["ARGENCASH_VERIFICATION_TOKEN_EXPIRATION_MINUTES"] = "VerificationToken__ExpirationMinutes",
+        ["ARGENCASH_SMTP_HOST"] = "Smtp__Host",
+        ["ARGENCASH_SMTP_PORT"] = "Smtp__Port",
+        ["ARGENCASH_SMTP_USERNAME"] = "Smtp__Username",
+        ["ARGENCASH_SMTP_PASSWORD"] = "Smtp__Password",
+        ["ARGENCASH_SMTP_FROM_NAME"] = "Smtp__FromName",
+        ["ARGENCASH_SMTP_FROM_EMAIL"] = "Smtp__FromEmail",
+        ["ARGENCASH_FRONTEND_URL"] = "FrontendUrl",
+        ["ARGENCASH_EXCHANGE_RATE_API_BASE_URL"] = "ExchangeRateApi__BaseUrl",
+        ["ARGENCASH_EXCHANGE_RATE_SOURCE_NAME"] = "ExchangeRateApi__SourceName",
+        ["ARGENCASH_ALLOWED_ORIGIN_0"] = "AllowedOrigins__0"
+    };
+
+    foreach (var mapping in mappings)
+    {
+        var sourceValue = Environment.GetEnvironmentVariable(mapping.Key);
+        if (string.IsNullOrWhiteSpace(sourceValue) || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable(mapping.Value)))
         {
             continue;
         }
 
-        var separatorIndex = line.IndexOf('=');
-        if (separatorIndex <= 0)
-        {
-            continue;
-        }
-
-        var key = line[..separatorIndex].Trim();
-        var value = line[(separatorIndex + 1)..].Trim();
-
-        if (value.Length >= 2 &&
-            ((value.StartsWith('"') && value.EndsWith('"')) || (value.StartsWith('\'') && value.EndsWith('\''))))
-        {
-            value = value[1..^1];
-        }
-
-        if (string.IsNullOrWhiteSpace(key) || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable(key)))
-        {
-            continue;
-        }
-
-        Environment.SetEnvironmentVariable(key, value);
+        Environment.SetEnvironmentVariable(mapping.Value, sourceValue);
     }
 }
