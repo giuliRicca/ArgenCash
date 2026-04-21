@@ -152,15 +152,11 @@ jobs:
           MONSTERASP_FTP_PASSWORD: ${{ secrets.MONSTERASP_FTP_PASSWORD }}
           MONSTERASP_FTP_TARGET_DIR: ${{ secrets.MONSTERASP_FTP_TARGET_DIR }}
         run: |
-          [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
-
-          $server = $env:MONSTERASP_FTP_SERVER.Trim()
-          if ($server -notmatch '^[a-zA-Z][a-zA-Z0-9+.-]*://') {
-            $server = "ftp://$server"
-          }
-
-          $targetDir = $env:MONSTERASP_FTP_TARGET_DIR.Trim('/')
-          $offlineUri = "$server/$targetDir/app_offline.htm"
+          $server = $env:MONSTERASP_FTP_SERVER.Trim() -replace '^ftp://', ''
+          $targetDir = $env:MONSTERASP_FTP_TARGET_DIR.Trim().Trim('/')
+          $pathPrefix = if ([string]::IsNullOrWhiteSpace($targetDir)) { '' } else { "/$targetDir" }
+          $offlineUri = "ftp://$server$pathPrefix/app_offline.htm"
+          $credentials = "{0}:{1}" -f $env:MONSTERASP_FTP_USERNAME, $env:MONSTERASP_FTP_PASSWORD
 
           $offlineFilePath = Join-Path $env:RUNNER_TEMP 'app_offline.htm'
           $offlineHtml = @(
@@ -179,39 +175,9 @@ jobs:
           ) -join "`n"
           [System.IO.File]::WriteAllText($offlineFilePath, $offlineHtml, [System.Text.UTF8Encoding]::new($false))
 
-          $bytes = [System.IO.File]::ReadAllBytes($offlineFilePath)
-          $uploaded = $false
-          $lastError = $null
-
-          foreach ($enableSsl in @($true, $false)) {
-            try {
-              $request = [System.Net.FtpWebRequest]::Create($offlineUri)
-              $request.Method = [System.Net.WebRequestMethods+Ftp]::UploadFile
-              $request.Credentials = [System.Net.NetworkCredential]::new($env:MONSTERASP_FTP_USERNAME, $env:MONSTERASP_FTP_PASSWORD)
-              $request.EnableSsl = $enableSsl
-              $request.UsePassive = $true
-              $request.UseBinary = $true
-              $request.KeepAlive = $false
-              $request.Timeout = 30000
-              $request.ReadWriteTimeout = 30000
-              $request.ContentLength = $bytes.Length
-
-              $stream = $request.GetRequestStream()
-              $stream.Write($bytes, 0, $bytes.Length)
-              $stream.Close()
-
-              $response = $request.GetResponse()
-              $response.Close()
-              $uploaded = $true
-              break
-            }
-            catch {
-              $lastError = $_
-            }
-          }
-
-          if (-not $uploaded) {
-            throw $lastError
+          & curl.exe --silent --show-error --fail --ftp-pasv --user $credentials --upload-file $offlineFilePath $offlineUri
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to upload app_offline.htm to $offlineUri"
           }
 
           Start-Sleep -Seconds 5
@@ -235,42 +201,13 @@ jobs:
           MONSTERASP_FTP_PASSWORD: ${{ secrets.MONSTERASP_FTP_PASSWORD }}
           MONSTERASP_FTP_TARGET_DIR: ${{ secrets.MONSTERASP_FTP_TARGET_DIR }}
         run: |
-          [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
+          $server = $env:MONSTERASP_FTP_SERVER.Trim() -replace '^ftp://', ''
+          $targetDir = $env:MONSTERASP_FTP_TARGET_DIR.Trim().Trim('/')
+          $pathPrefix = if ([string]::IsNullOrWhiteSpace($targetDir)) { '' } else { "/$targetDir" }
+          $baseUri = "ftp://$server$pathPrefix/"
+          $credentials = "{0}:{1}" -f $env:MONSTERASP_FTP_USERNAME, $env:MONSTERASP_FTP_PASSWORD
 
-          $server = $env:MONSTERASP_FTP_SERVER.Trim()
-          if ($server -notmatch '^[a-zA-Z][a-zA-Z0-9+.-]*://') {
-            $server = "ftp://$server"
-          }
-
-          $targetDir = $env:MONSTERASP_FTP_TARGET_DIR.Trim('/')
-          $offlineUri = "$server/$targetDir/app_offline.htm"
-
-          $deleted = $false
-          $lastError = $null
-
-          foreach ($enableSsl in @($true, $false)) {
-            try {
-              $request = [System.Net.FtpWebRequest]::Create($offlineUri)
-              $request.Method = [System.Net.WebRequestMethods+Ftp]::DeleteFile
-              $request.Credentials = [System.Net.NetworkCredential]::new($env:MONSTERASP_FTP_USERNAME, $env:MONSTERASP_FTP_PASSWORD)
-              $request.EnableSsl = $enableSsl
-              $request.UsePassive = $true
-              $request.UseBinary = $true
-              $request.KeepAlive = $false
-              $request.Timeout = 30000
-              $request.ReadWriteTimeout = 30000
-
-              $response = $request.GetResponse()
-              $response.Close()
-              $deleted = $true
-              break
-            }
-            catch {
-              $lastError = $_
-            }
-          }
-
-          if (-not $deleted) {
-            Write-Warning "Could not delete app_offline.htm. The application might remain offline. $lastError"
-            throw $lastError
+          & curl.exe --silent --show-error --ftp-pasv --user $credentials --quote "DELE app_offline.htm" $baseUri
+          if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Could not delete app_offline.htm. Verify credentials and MONSTERASP_FTP_TARGET_DIR."
           }
