@@ -25,38 +25,20 @@ public class ArgenCashDbContextFactory : IDesignTimeDbContextFactory<ArgenCashDb
             .AddJsonFile(Path.Combine(apiDirectory, $"appsettings.{environment}.json"), optional: true)
             .AddJsonFile("appsettings.json", optional: true)
             .AddJsonFile($"appsettings.{environment}.json", optional: true)
-            .AddEnvironmentVariables(prefix: "ARGENCASH_")
             .AddEnvironmentVariables()
             .Build();
 
-        var connectionString = configuration["ARGENCASH_EF_DB_CONNECTION"];
-
-        if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            connectionString = Environment.GetEnvironmentVariable("ARGENCASH_EF_DB_CONNECTION");
-        }
-
-        if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            connectionString = configuration.GetConnectionString("DefaultConnection");
-        }
-
-        if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            connectionString = configuration["ConnectionStrings:DefaultConnection"];
-        }
-
-        if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            connectionString = configuration["ARGENCASH_DB_CONNECTION"];
-        }
+        var connectionString =
+            configuration.GetConnectionString("DefaultConnection")
+            ?? configuration["ConnectionStrings:DefaultConnection"]
+            ?? configuration["ARGENCASH_DB_CONNECTION"];
 
         if (string.IsNullOrWhiteSpace(connectionString))
         {
             throw new InvalidOperationException(
-                "Connection string 'ConnectionStrings:DefaultConnection' is missing for EF design-time operations. " +
-                "Set ARGENCASH_EF_DB_CONNECTION for local EF commands, or configure ArgenCash.Api/appsettings.Development.json, " +
-                "ArgenCash.Api/.env (ConnectionStrings__DefaultConnection), or Backend/.env (ARGENCASH_DB_CONNECTION)."
+                "Connection string is missing for EF design-time operations. " +
+                "Set ConnectionStrings__DefaultConnection (as in Backend/.env.example), " +
+                "or ARGENCASH_DB_CONNECTION (as in deployment pipeline env vars)."
             );
         }
 
