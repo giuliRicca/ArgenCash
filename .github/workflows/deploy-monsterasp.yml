@@ -144,6 +144,56 @@ jobs:
           $json = $config | ConvertTo-Json -Depth 8
           [System.IO.File]::WriteAllText($outFile, $json, [System.Text.UTF8Encoding]::new($false))
 
+      - name: Put app offline
+        shell: pwsh
+        env:
+          MONSTERASP_FTP_SERVER: ${{ secrets.MONSTERASP_FTP_SERVER }}
+          MONSTERASP_FTP_USERNAME: ${{ secrets.MONSTERASP_FTP_USERNAME }}
+          MONSTERASP_FTP_PASSWORD: ${{ secrets.MONSTERASP_FTP_PASSWORD }}
+          MONSTERASP_FTP_TARGET_DIR: ${{ secrets.MONSTERASP_FTP_TARGET_DIR }}
+        run: |
+          $server = $env:MONSTERASP_FTP_SERVER.Trim()
+          if ($server -notmatch '^[a-zA-Z][a-zA-Z0-9+.-]*://') {
+            $server = "ftp://$server"
+          }
+
+          $targetDir = $env:MONSTERASP_FTP_TARGET_DIR.Trim('/')
+          $offlineUri = "$server/$targetDir/app_offline.htm"
+
+          $offlineFilePath = Join-Path $env:RUNNER_TEMP 'app_offline.htm'
+          @'
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ArgenCash - Updating</title>
+</head>
+<body>
+  <h1>ArgenCash is being updated</h1>
+  <p>Please try again in a minute.</p>
+</body>
+</html>
+'@ | Set-Content -Path $offlineFilePath -Encoding UTF8
+
+          $request = [System.Net.FtpWebRequest]::Create($offlineUri)
+          $request.Method = [System.Net.WebRequestMethods+Ftp]::UploadFile
+          $request.Credentials = [System.Net.NetworkCredential]::new($env:MONSTERASP_FTP_USERNAME, $env:MONSTERASP_FTP_PASSWORD)
+          $request.UseBinary = $true
+          $request.KeepAlive = $false
+
+          $bytes = [System.IO.File]::ReadAllBytes($offlineFilePath)
+          $request.ContentLength = $bytes.Length
+
+          $stream = $request.GetRequestStream()
+          $stream.Write($bytes, 0, $bytes.Length)
+          $stream.Close()
+
+          $response = $request.GetResponse()
+          $response.Close()
+
+          Start-Sleep -Seconds 5
+
       - name: Deploy published output to MonsterASP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
@@ -153,3 +203,35 @@ jobs:
           server-dir: ${{ secrets.MONSTERASP_FTP_TARGET_DIR }}
           local-dir: ${{ env.PUBLISH_DIR }}/
           dangerous-clean-slate: false
+
+      - name: Remove app_offline.htm
+        if: always()
+        shell: pwsh
+        env:
+          MONSTERASP_FTP_SERVER: ${{ secrets.MONSTERASP_FTP_SERVER }}
+          MONSTERASP_FTP_USERNAME: ${{ secrets.MONSTERASP_FTP_USERNAME }}
+          MONSTERASP_FTP_PASSWORD: ${{ secrets.MONSTERASP_FTP_PASSWORD }}
+          MONSTERASP_FTP_TARGET_DIR: ${{ secrets.MONSTERASP_FTP_TARGET_DIR }}
+        run: |
+          $server = $env:MONSTERASP_FTP_SERVER.Trim()
+          if ($server -notmatch '^[a-zA-Z][a-zA-Z0-9+.-]*://') {
+            $server = "ftp://$server"
+          }
+
+          $targetDir = $env:MONSTERASP_FTP_TARGET_DIR.Trim('/')
+          $offlineUri = "$server/$targetDir/app_offline.htm"
+
+          try {
+            $request = [System.Net.FtpWebRequest]::Create($offlineUri)
+            $request.Method = [System.Net.WebRequestMethods+Ftp]::DeleteFile
+            $request.Credentials = [System.Net.NetworkCredential]::new($env:MONSTERASP_FTP_USERNAME, $env:MONSTERASP_FTP_PASSWORD)
+            $request.UseBinary = $true
+            $request.KeepAlive = $false
+
+            $response = $request.GetResponse()
+            $response.Close()
+          }
+          catch {
+            Write-Warning "Could not delete app_offline.htm. The application might remain offline. $_"
+            throw
+          }
