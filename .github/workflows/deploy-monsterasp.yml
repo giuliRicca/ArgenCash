@@ -145,6 +145,7 @@ jobs:
           [System.IO.File]::WriteAllText($outFile, $json, [System.Text.UTF8Encoding]::new($false))
 
       - name: Put app offline
+        id: put_offline
         continue-on-error: true
         shell: pwsh
         env:
@@ -153,6 +154,8 @@ jobs:
           MONSTERASP_FTP_PASSWORD: ${{ secrets.MONSTERASP_FTP_PASSWORD }}
           MONSTERASP_FTP_TARGET_DIR: ${{ secrets.MONSTERASP_FTP_TARGET_DIR }}
         run: |
+          "offline_uploaded=false" >> $env:GITHUB_OUTPUT
+
           $server = $env:MONSTERASP_FTP_SERVER.Trim() -replace '^ftp://', ''
           $targetDir = $env:MONSTERASP_FTP_TARGET_DIR.Trim().Trim('/')
           $pathPrefix = if ([string]::IsNullOrWhiteSpace($targetDir)) { '' } else { "/$targetDir" }
@@ -186,6 +189,8 @@ jobs:
             return
           }
 
+          "offline_uploaded=true" >> $env:GITHUB_OUTPUT
+
           Start-Sleep -Seconds 5
 
       - name: Deploy published output to MonsterASP
@@ -199,7 +204,8 @@ jobs:
           dangerous-clean-slate: false
 
       - name: Remove app_offline.htm
-        if: always()
+        if: always() && steps.put_offline.outputs.offline_uploaded == 'true'
+        continue-on-error: true
         shell: pwsh
         env:
           MONSTERASP_FTP_SERVER: ${{ secrets.MONSTERASP_FTP_SERVER }}
@@ -207,6 +213,8 @@ jobs:
           MONSTERASP_FTP_PASSWORD: ${{ secrets.MONSTERASP_FTP_PASSWORD }}
           MONSTERASP_FTP_TARGET_DIR: ${{ secrets.MONSTERASP_FTP_TARGET_DIR }}
         run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+
           $server = $env:MONSTERASP_FTP_SERVER.Trim() -replace '^ftp://', ''
           $targetDir = $env:MONSTERASP_FTP_TARGET_DIR.Trim().Trim('/')
           $pathPrefix = if ([string]::IsNullOrWhiteSpace($targetDir)) { '' } else { "/$targetDir" }
