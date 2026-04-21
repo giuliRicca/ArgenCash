@@ -9,6 +9,9 @@ public class AccountDetailSnapshot
     public string Name { get; init; } = string.Empty;
     public string CurrencyCode { get; init; } = string.Empty;
     public ExchangeRateType ExchangeRateType { get; init; }
+    public AccountType AccountType { get; init; }
+    public Guid? FundingAccountId { get; init; }
+    public int? PaymentDayOfMonth { get; init; }
     public decimal BalanceInAccountCurrency { get; init; }
     public decimal BalanceUsd { get; init; }
     public decimal BalanceArs { get; init; }

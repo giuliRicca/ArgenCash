@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using ArgenCash.Application.Interfaces;
@@ -38,10 +37,10 @@ public class SmtpEmailSender : IEmailSender
         }.ToMessageBody();
 
         using var client = new SmtpClient();
+        client.ServerCertificateValidationCallback = ValidateServerCertificate;
 
         try
         {
-            ServicePointManager.ServerCertificateValidationCallback = ValidateServerCertificate;
             await client.ConnectAsync(_options.Host, _options.Port, MailKit.Security.SecureSocketOptions.StartTls);
             await client.AuthenticateAsync(_options.Username, _options.Password);
             await client.SendAsync(message);
@@ -60,6 +59,6 @@ public class SmtpEmailSender : IEmailSender
 
     private static bool ValidateServerCertificate(object sender, X509Certificate? certificate, X509Chain? chain, SslPolicyErrors sslPolicyErrors)
     {
-        return true;
+        return sslPolicyErrors == SslPolicyErrors.None;
     }
 }

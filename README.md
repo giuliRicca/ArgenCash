@@ -41,15 +41,19 @@ Most personal finance apps assume one stable currency. ArgenCash is designed for
 
 At minimum, configure these settings (environment variables or `appsettings.Development.json`):
 
-- `ConnectionStrings__DefaultConnection`
-- `Jwt__Issuer`, `Jwt__Audience`, `Jwt__SecretKey`, `Jwt__ExpirationMinutes`
-- `VerificationToken__SecretKey`, `VerificationToken__ExpirationMinutes`, `VerificationToken__Issuer`
-- `ExchangeRateApi__BaseUrl`, `ExchangeRateApi__SourceName`
-- `AllowedOrigins__0`
+- `ARGENCASH_DB_CONNECTION`
+- `ARGENCASH_JWT_ISSUER`, `ARGENCASH_JWT_AUDIENCE`, `ARGENCASH_JWT_SECRET`, `ARGENCASH_JWT_EXPIRATION_MINUTES`
+- `ARGENCASH_VERIFICATION_TOKEN_SECRET`, `ARGENCASH_VERIFICATION_TOKEN_EXPIRATION_MINUTES`
+- `ARGENCASH_EXCHANGE_RATE_API_BASE_URL`, `ARGENCASH_EXCHANGE_RATE_SOURCE_NAME`
+- `ARGENCASH_ALLOWED_ORIGIN_0`
+
+For EF design-time commands, you can override the database endpoint without changing runtime settings:
+
+- `ARGENCASH_EF_DB_CONNECTION` (preferred for `dotnet ef` on local/non-pooler Postgres)
 
 For email verification flows, also set SMTP settings:
 
-- `Smtp__Host`, `Smtp__Port`, `Smtp__Username`, `Smtp__Password`, `Smtp__FromName`, `Smtp__FromEmail`
+- `ARGENCASH_SMTP_HOST`, `ARGENCASH_SMTP_PORT`, `ARGENCASH_SMTP_USERNAME`, `ARGENCASH_SMTP_PASSWORD`, `ARGENCASH_SMTP_FROM_NAME`, `ARGENCASH_SMTP_FROM_EMAIL`
 
 ### 2) Restore and run
 
@@ -57,6 +61,13 @@ For email verification flows, also set SMTP settings:
 dotnet restore "ArgenCash.slnx"
 dotnet ef database update --project "ArgenCash.Infrastructure/ArgenCash.Infrastructure.csproj" --startup-project "ArgenCash.Api/ArgenCash.Api.csproj"
 dotnet run --project "ArgenCash.Api/ArgenCash.Api.csproj"
+```
+
+PowerShell example using a local Postgres endpoint for EF only:
+
+```powershell
+$env:ARGENCASH_EF_DB_CONNECTION="Host=localhost;Port=5432;Database=ArgenCashDB;Username=postgres;Password=secret"
+dotnet ef database update --project "ArgenCash.Infrastructure/ArgenCash.Infrastructure.csproj" --startup-project "ArgenCash.Api/ArgenCash.Api.csproj"
 ```
 
 Default local API URL: `http://localhost:5018`

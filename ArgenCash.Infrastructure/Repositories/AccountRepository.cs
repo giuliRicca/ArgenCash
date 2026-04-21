@@ -104,6 +104,9 @@ namespace ArgenCash.Infrastructure.Repositories
                 Name = account.Name,
                 CurrencyCode = account.CurrencyCode,
                 ExchangeRateType = account.ExchangeRateType,
+                AccountType = account.AccountType,
+                FundingAccountId = account.FundingAccountId,
+                PaymentDayOfMonth = account.PaymentDayOfMonth,
                 BalanceInAccountCurrency = account.BalanceInAccountCurrency,
                 BalanceUsd = account.BalanceUsd,
                 BalanceArs = account.BalanceArs,
@@ -123,6 +126,47 @@ namespace ArgenCash.Infrastructure.Repositories
                 .ToListAsync();
         }
 
+        public async Task<List<CreditAccountSettlementCandidateSnapshot>> GetCreditSettlementCandidatesAsync(
+            Guid userId,
+            CancellationToken cancellationToken = default)
+        {
+            return await _context.Accounts
+                .AsNoTracking()
+                .Where(account =>
+                    account.UserId == userId &&
+                    account.AccountType == AccountType.Credit &&
+                    account.FundingAccountId.HasValue &&
+                    account.PaymentDayOfMonth.HasValue)
+                .Select(account => new CreditAccountSettlementCandidateSnapshot
+                {
+                    Id = account.Id,
+                    CurrencyCode = account.CurrencyCode,
+                    ExchangeRateType = account.ExchangeRateType,
+                    FundingAccountId = account.FundingAccountId!.Value,
+                    PaymentDayOfMonth = account.PaymentDayOfMonth!.Value
+                })
+                .ToListAsync(cancellationToken);
+        }
+
+        public async Task<decimal> GetCreditStatementNetExpenseAsync(
+            Guid creditAccountId,
+            DateTime fromUtc,
+            DateTime toUtcExclusive,
+            CancellationToken cancellationToken = default)
+        {
+            return await _context.Transactions
+                .AsNoTracking()
+                .Where(transaction =>
+                    transaction.AccountId == creditAccountId &&
+                    transaction.TransferGroupId == null &&
+                    transaction.TransactionDate >= fromUtc &&
+                    transaction.TransactionDate < toUtcExclusive)
+                .Select(transaction => (decimal?)(transaction.TransactionType == TransactionType.Expense
+                    ? transaction.Amount
+                    : -transaction.Amount))
+                .SumAsync(cancellationToken) ?? 0m;
+        }
+
         private IQueryable<AccountBalanceSnapshot> BuildAccountBalanceQuery(Guid userId)
         {
             return _context.Accounts
@@ -134,6 +178,9 @@ namespace ArgenCash.Infrastructure.Repositories
                     Name = account.Name,
                     CurrencyCode = account.CurrencyCode,
                     ExchangeRateType = account.ExchangeRateType,
+                    AccountType = account.AccountType,
+                    FundingAccountId = account.FundingAccountId,
+                    PaymentDayOfMonth = account.PaymentDayOfMonth,
                     BalanceInAccountCurrency = _context.Transactions
                         .Where(transaction => transaction.AccountId == account.Id)
                         .Select(transaction => (decimal?)(transaction.TransactionType == TransactionType.Expense ? -transaction.Amount : transaction.Amount))
@@ -148,5 +195,6 @@ namespace ArgenCash.Infrastructure.Repositories
                         .Sum() ?? 0m,
                 });
         }
+
     }
 }

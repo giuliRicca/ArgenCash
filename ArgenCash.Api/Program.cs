@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using DotNetEnv;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using System.Text;
@@ -8,7 +9,14 @@ using ArgenCash.Application;
 using ArgenCash.Infrastructure;
 using ArgenCash.Infrastructure.Authentication;
 
-LoadDotEnvVariables();
+var currentDirectory = Directory.GetCurrentDirectory();
+var backendDirectory = ResolveBackendDirectory(currentDirectory);
+var dotenvPath = Path.Combine(backendDirectory, ".env");
+
+if (File.Exists(dotenvPath))
+{
+    Env.Load(dotenvPath);
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -148,44 +156,19 @@ app.MapControllers();
 
 app.Run();
 
-static void LoadDotEnvVariables()
+static string ResolveBackendDirectory(string currentDirectory)
 {
-    var dotenvPath = Path.Combine(Directory.GetCurrentDirectory(), ".env");
+    var directory = new DirectoryInfo(currentDirectory);
 
-    if (!File.Exists(dotenvPath))
+    while (directory is not null)
     {
-        return;
+        if (string.Equals(directory.Name, "Backend", StringComparison.OrdinalIgnoreCase))
+        {
+            return directory.FullName;
+        }
+
+        directory = directory.Parent;
     }
 
-    foreach (var rawLine in File.ReadAllLines(dotenvPath))
-    {
-        var line = rawLine.Trim();
-
-        if (line.Length == 0 || line.StartsWith("#", StringComparison.Ordinal))
-        {
-            continue;
-        }
-
-        var separatorIndex = line.IndexOf('=');
-        if (separatorIndex <= 0)
-        {
-            continue;
-        }
-
-        var key = line[..separatorIndex].Trim();
-        var value = line[(separatorIndex + 1)..].Trim();
-
-        if (value.Length >= 2 &&
-            ((value.StartsWith('"') && value.EndsWith('"')) || (value.StartsWith('\'') && value.EndsWith('\''))))
-        {
-            value = value[1..^1];
-        }
-
-        if (string.IsNullOrWhiteSpace(key) || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable(key)))
-        {
-            continue;
-        }
-
-        Environment.SetEnvironmentVariable(key, value);
-    }
+    return currentDirectory;
 }

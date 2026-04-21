@@ -15,6 +15,7 @@ public static class DependencyInjection
         services.AddScoped<IExchangeRateUsabilityPolicy, ExchangeRateUsabilityPolicy>();
         services.AddScoped<ICategoryService, CategoryService>();
         services.AddScoped<IBudgetService, BudgetService>();
+        services.AddScoped<ICreditCardSettlementService, CreditCardSettlementService>();
 
         return services;
     }
