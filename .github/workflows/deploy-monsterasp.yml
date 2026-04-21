@@ -161,20 +161,21 @@ jobs:
           $offlineUri = "$server/$targetDir/app_offline.htm"
 
           $offlineFilePath = Join-Path $env:RUNNER_TEMP 'app_offline.htm'
-          @'
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ArgenCash - Updating</title>
-</head>
-<body>
-  <h1>ArgenCash is being updated</h1>
-  <p>Please try again in a minute.</p>
-</body>
-</html>
-'@ | Set-Content -Path $offlineFilePath -Encoding UTF8
+          $offlineHtml = @(
+            '<!doctype html>',
+            '<html lang="en">',
+            '<head>',
+            '  <meta charset="utf-8" />',
+            '  <meta name="viewport" content="width=device-width, initial-scale=1" />',
+            '  <title>ArgenCash - Updating</title>',
+            '</head>',
+            '<body>',
+            '  <h1>ArgenCash is being updated</h1>',
+            '  <p>Please try again in a minute.</p>',
+            '</body>',
+            '</html>'
+          ) -join "`n"
+          [System.IO.File]::WriteAllText($offlineFilePath, $offlineHtml, [System.Text.UTF8Encoding]::new($false))
 
           $request = [System.Net.FtpWebRequest]::Create($offlineUri)
           $request.Method = [System.Net.WebRequestMethods+Ftp]::UploadFile
