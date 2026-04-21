@@ -14,6 +14,7 @@ public class ArgenCashDbContext : DbContext
     public DbSet<User> Users => Set<User>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Budget> Budgets => Set<Budget>();
+    public DbSet<CreditCardStatementSettlement> CreditCardStatementSettlements => Set<CreditCardStatementSettlement>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

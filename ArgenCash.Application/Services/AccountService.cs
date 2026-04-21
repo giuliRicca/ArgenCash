@@ -23,7 +23,20 @@ public class AccountService : IAccountService
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var account = Account.Create(request.Name, request.CurrencyCode, userId);
+        await ValidateFundingAccountAsync(
+            userId,
+            request.AccountType,
+            request.FundingAccountId,
+            null,
+            CancellationToken.None);
+
+        var account = Account.Create(
+            request.Name,
+            request.CurrencyCode,
+            userId,
+            request.AccountType,
+            request.FundingAccountId,
+            request.PaymentDayOfMonth);
 
         await _accountRepository.AddAsync(account);
         await _accountRepository.SaveChangesAsync();
@@ -44,8 +57,15 @@ public class AccountService : IAccountService
 
         var hasNameUpdate = !string.IsNullOrWhiteSpace(request.Name);
         var hasExchangeRateTypeUpdate = request.ExchangeRateType.HasValue;
+        var hasAccountTypeUpdate = request.AccountType.HasValue;
+        var hasFundingAccountUpdate = request.FundingAccountId.HasValue;
+        var hasPaymentDayUpdate = request.PaymentDayOfMonth.HasValue;
 
-        if (!hasNameUpdate && !hasExchangeRateTypeUpdate)
+        if (!hasNameUpdate &&
+            !hasExchangeRateTypeUpdate &&
+            !hasAccountTypeUpdate &&
+            !hasFundingAccountUpdate &&
+            !hasPaymentDayUpdate)
         {
             throw new ArgumentException("At least one account field must be provided.", nameof(request));
         }
@@ -58,6 +78,26 @@ public class AccountService : IAccountService
         if (hasExchangeRateTypeUpdate)
         {
             account.SetExchangeRateType(request.ExchangeRateType!.Value);
+        }
+
+        if (hasAccountTypeUpdate || hasFundingAccountUpdate || hasPaymentDayUpdate)
+        {
+            var targetAccountType = request.AccountType ?? account.AccountType;
+            var targetFundingAccountId = targetAccountType == AccountType.Credit
+                ? request.FundingAccountId ?? account.FundingAccountId
+                : null;
+            var targetPaymentDayOfMonth = targetAccountType == AccountType.Credit
+                ? request.PaymentDayOfMonth ?? account.PaymentDayOfMonth
+                : null;
+
+            await ValidateFundingAccountAsync(
+                userId,
+                targetAccountType,
+                targetFundingAccountId,
+                account.Id,
+                cancellationToken);
+
+            account.ConfigureAccountType(targetAccountType, targetFundingAccountId, targetPaymentDayOfMonth);
         }
 
         await _accountRepository.SaveChangesAsync();
@@ -298,6 +338,9 @@ public class AccountService : IAccountService
             Name = account.Name,
             CurrencyCode = account.CurrencyCode,
             ExchangeRateType = ExchangeRateTypes.ToString(account.ExchangeRateType),
+            AccountType = AccountTypes.ToString(account.AccountType),
+            FundingAccountId = account.FundingAccountId,
+            PaymentDayOfMonth = account.PaymentDayOfMonth,
             BalanceInAccountCurrency = account.BalanceInAccountCurrency,
             BalanceUsd = account.BalanceUsd,
             BalanceArs = account.BalanceArs
@@ -312,11 +355,48 @@ public class AccountService : IAccountService
             Name = account.Name,
             CurrencyCode = account.CurrencyCode,
             ExchangeRateType = ExchangeRateTypes.ToString(account.ExchangeRateType),
+            AccountType = AccountTypes.ToString(account.AccountType),
+            FundingAccountId = account.FundingAccountId,
+            PaymentDayOfMonth = account.PaymentDayOfMonth,
             BalanceInAccountCurrency = account.BalanceInAccountCurrency,
             BalanceUsd = account.BalanceUsd,
             BalanceArs = account.BalanceArs,
             Transactions = account.Transactions
         };
+    }
+
+    private async Task ValidateFundingAccountAsync(
+        Guid userId,
+        AccountType accountType,
+        Guid? fundingAccountId,
+        Guid? creditAccountId,
+        CancellationToken cancellationToken)
+    {
+        if (accountType != AccountType.Credit)
+        {
+            return;
+        }
+
+        if (!fundingAccountId.HasValue)
+        {
+            return;
+        }
+
+        if (creditAccountId.HasValue && fundingAccountId.Value == creditAccountId.Value)
+        {
+            throw new ArgumentException("Funding account must be different from the credit account.", nameof(fundingAccountId));
+        }
+
+        var fundingAccount = await _accountRepository.GetForUpdateAsync(fundingAccountId.Value, userId, cancellationToken);
+        if (fundingAccount is null)
+        {
+            throw new ArgumentException("Funding account not found.", nameof(fundingAccountId));
+        }
+
+        if (fundingAccount.AccountType == AccountType.Credit)
+        {
+            throw new ArgumentException("Funding account cannot be a credit account.", nameof(fundingAccountId));
+        }
     }
 
     private static (decimal convertedAmountUsd, decimal convertedAmountArs) CalculateConvertedAmounts(

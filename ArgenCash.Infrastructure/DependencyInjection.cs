@@ -74,6 +74,7 @@ public static class DependencyInjection
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<ICategoryRepository, CategoryRepository>();
         services.AddScoped<IBudgetRepository, BudgetRepository>();
+        services.AddScoped<ICreditCardStatementSettlementRepository, CreditCardStatementSettlementRepository>();
         services.AddScoped<IEmailSender, SmtpEmailSender>();
 
         return services;
