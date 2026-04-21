@@ -152,6 +152,8 @@ jobs:
           MONSTERASP_FTP_PASSWORD: ${{ secrets.MONSTERASP_FTP_PASSWORD }}
           MONSTERASP_FTP_TARGET_DIR: ${{ secrets.MONSTERASP_FTP_TARGET_DIR }}
         run: |
+          [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
+
           $server = $env:MONSTERASP_FTP_SERVER.Trim()
           if ($server -notmatch '^[a-zA-Z][a-zA-Z0-9+.-]*://') {
             $server = "ftp://$server"
@@ -177,21 +179,40 @@ jobs:
           ) -join "`n"
           [System.IO.File]::WriteAllText($offlineFilePath, $offlineHtml, [System.Text.UTF8Encoding]::new($false))
 
-          $request = [System.Net.FtpWebRequest]::Create($offlineUri)
-          $request.Method = [System.Net.WebRequestMethods+Ftp]::UploadFile
-          $request.Credentials = [System.Net.NetworkCredential]::new($env:MONSTERASP_FTP_USERNAME, $env:MONSTERASP_FTP_PASSWORD)
-          $request.UseBinary = $true
-          $request.KeepAlive = $false
-
           $bytes = [System.IO.File]::ReadAllBytes($offlineFilePath)
-          $request.ContentLength = $bytes.Length
+          $uploaded = $false
+          $lastError = $null
 
-          $stream = $request.GetRequestStream()
-          $stream.Write($bytes, 0, $bytes.Length)
-          $stream.Close()
+          foreach ($enableSsl in @($true, $false)) {
+            try {
+              $request = [System.Net.FtpWebRequest]::Create($offlineUri)
+              $request.Method = [System.Net.WebRequestMethods+Ftp]::UploadFile
+              $request.Credentials = [System.Net.NetworkCredential]::new($env:MONSTERASP_FTP_USERNAME, $env:MONSTERASP_FTP_PASSWORD)
+              $request.EnableSsl = $enableSsl
+              $request.UsePassive = $true
+              $request.UseBinary = $true
+              $request.KeepAlive = $false
+              $request.Timeout = 30000
+              $request.ReadWriteTimeout = 30000
+              $request.ContentLength = $bytes.Length
 
-          $response = $request.GetResponse()
-          $response.Close()
+              $stream = $request.GetRequestStream()
+              $stream.Write($bytes, 0, $bytes.Length)
+              $stream.Close()
+
+              $response = $request.GetResponse()
+              $response.Close()
+              $uploaded = $true
+              break
+            }
+            catch {
+              $lastError = $_
+            }
+          }
+
+          if (-not $uploaded) {
+            throw $lastError
+          }
 
           Start-Sleep -Seconds 5
 
@@ -214,6 +235,8 @@ jobs:
           MONSTERASP_FTP_PASSWORD: ${{ secrets.MONSTERASP_FTP_PASSWORD }}
           MONSTERASP_FTP_TARGET_DIR: ${{ secrets.MONSTERASP_FTP_TARGET_DIR }}
         run: |
+          [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
+
           $server = $env:MONSTERASP_FTP_SERVER.Trim()
           if ($server -notmatch '^[a-zA-Z][a-zA-Z0-9+.-]*://') {
             $server = "ftp://$server"
@@ -222,17 +245,32 @@ jobs:
           $targetDir = $env:MONSTERASP_FTP_TARGET_DIR.Trim('/')
           $offlineUri = "$server/$targetDir/app_offline.htm"
 
-          try {
-            $request = [System.Net.FtpWebRequest]::Create($offlineUri)
-            $request.Method = [System.Net.WebRequestMethods+Ftp]::DeleteFile
-            $request.Credentials = [System.Net.NetworkCredential]::new($env:MONSTERASP_FTP_USERNAME, $env:MONSTERASP_FTP_PASSWORD)
-            $request.UseBinary = $true
-            $request.KeepAlive = $false
+          $deleted = $false
+          $lastError = $null
 
-            $response = $request.GetResponse()
-            $response.Close()
+          foreach ($enableSsl in @($true, $false)) {
+            try {
+              $request = [System.Net.FtpWebRequest]::Create($offlineUri)
+              $request.Method = [System.Net.WebRequestMethods+Ftp]::DeleteFile
+              $request.Credentials = [System.Net.NetworkCredential]::new($env:MONSTERASP_FTP_USERNAME, $env:MONSTERASP_FTP_PASSWORD)
+              $request.EnableSsl = $enableSsl
+              $request.UsePassive = $true
+              $request.UseBinary = $true
+              $request.KeepAlive = $false
+              $request.Timeout = 30000
+              $request.ReadWriteTimeout = 30000
+
+              $response = $request.GetResponse()
+              $response.Close()
+              $deleted = $true
+              break
+            }
+            catch {
+              $lastError = $_
+            }
           }
-          catch {
-            Write-Warning "Could not delete app_offline.htm. The application might remain offline. $_"
-            throw
+
+          if (-not $deleted) {
+            Write-Warning "Could not delete app_offline.htm. The application might remain offline. $lastError"
+            throw $lastError
           }
