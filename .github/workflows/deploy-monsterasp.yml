@@ -145,6 +145,7 @@ jobs:
           [System.IO.File]::WriteAllText($outFile, $json, [System.Text.UTF8Encoding]::new($false))
 
       - name: Put app offline
+        continue-on-error: true
         shell: pwsh
         env:
           MONSTERASP_FTP_SERVER: ${{ secrets.MONSTERASP_FTP_SERVER }}
@@ -157,6 +158,10 @@ jobs:
           $pathPrefix = if ([string]::IsNullOrWhiteSpace($targetDir)) { '' } else { "/$targetDir" }
           $offlineUri = "ftp://$server$pathPrefix/app_offline.htm"
           $credentials = "{0}:{1}" -f $env:MONSTERASP_FTP_USERNAME, $env:MONSTERASP_FTP_PASSWORD
+
+          if ([string]::IsNullOrWhiteSpace($targetDir)) {
+            Write-Warning "MONSTERASP_FTP_TARGET_DIR resolved empty. Expected value like /wwwroot."
+          }
 
           $offlineFilePath = Join-Path $env:RUNNER_TEMP 'app_offline.htm'
           $offlineHtml = @(
@@ -177,7 +182,8 @@ jobs:
 
           & curl.exe --silent --show-error --fail --ftp-pasv --user $credentials --upload-file $offlineFilePath $offlineUri
           if ($LASTEXITCODE -ne 0) {
-            throw "Failed to upload app_offline.htm to $offlineUri"
+            Write-Warning "Failed to upload app_offline.htm to $offlineUri. Continuing deploy without offline mode."
+            return
           }
 
           Start-Sleep -Seconds 5
