@@ -146,7 +146,6 @@ jobs:
 
       - name: Put app offline
         id: put_offline
-        continue-on-error: true
         shell: pwsh
         env:
           MONSTERASP_FTP_SERVER: ${{ secrets.MONSTERASP_FTP_SERVER }}
@@ -158,12 +157,14 @@ jobs:
 
           $server = $env:MONSTERASP_FTP_SERVER.Trim() -replace '^ftp://', ''
           $targetDir = $env:MONSTERASP_FTP_TARGET_DIR.Trim().Trim('/')
+          $username = $env:MONSTERASP_FTP_USERNAME.Trim()
+          $password = $env:MONSTERASP_FTP_PASSWORD.Trim()
           $pathPrefix = if ([string]::IsNullOrWhiteSpace($targetDir)) { '' } else { "/$targetDir" }
           $offlineUri = "ftp://$server$pathPrefix/app_offline.htm"
-          $credentials = "{0}:{1}" -f $env:MONSTERASP_FTP_USERNAME, $env:MONSTERASP_FTP_PASSWORD
+          $credentials = "{0}:{1}" -f $username, $password
 
           if ([string]::IsNullOrWhiteSpace($targetDir)) {
-            Write-Warning "MONSTERASP_FTP_TARGET_DIR resolved empty. Expected value like /wwwroot."
+            throw "MONSTERASP_FTP_TARGET_DIR resolved empty. Set it to a directory like /wwwroot/."
           }
 
           $offlineFilePath = Join-Path $env:RUNNER_TEMP 'app_offline.htm'
@@ -185,8 +186,7 @@ jobs:
 
           & curl.exe --silent --show-error --fail --ftp-pasv --user $credentials --upload-file $offlineFilePath $offlineUri
           if ($LASTEXITCODE -ne 0) {
-            Write-Warning "Failed to upload app_offline.htm to $offlineUri. Continuing deploy without offline mode."
-            return
+            throw "Failed to upload app_offline.htm to $offlineUri. Aborting deploy to avoid file-lock replacement errors."
           }
 
           "offline_uploaded=true" >> $env:GITHUB_OUTPUT
