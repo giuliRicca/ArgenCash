@@ -17,6 +17,8 @@ public static class DependencyInjection
         var connectionString = configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("Connection string 'DefaultConnection' was not found.");
 
+        connectionString = EnsureGssEncryptionModeDisabled(connectionString);
+
         services.AddOptions<JwtOptions>()
             .Bind(configuration.GetSection(JwtOptions.SectionName))
             .Validate(options =>
@@ -78,5 +80,37 @@ public static class DependencyInjection
         services.AddScoped<IEmailSender, SmtpEmailSender>();
 
         return services;
+    }
+
+    private static string EnsureGssEncryptionModeDisabled(string connectionString)
+    {
+        var segments = connectionString
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+
+        var hasSetting = false;
+        for (var i = 0; i < segments.Count; i++)
+        {
+            var separatorIndex = segments[i].IndexOf('=');
+            if (separatorIndex <= 0)
+            {
+                continue;
+            }
+
+            var key = segments[i][..separatorIndex].Trim();
+            if (key.Equals("GssEncryptionMode", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("Gss Enc Mode", StringComparison.OrdinalIgnoreCase))
+            {
+                segments[i] = "GssEncryptionMode=Disable";
+                hasSetting = true;
+            }
+        }
+
+        if (!hasSetting)
+        {
+            segments.Add("GssEncryptionMode=Disable");
+        }
+
+        return string.Join(';', segments);
     }
 }
