@@ -12,4 +12,5 @@ public interface IAccountService
     Task<AccountDto?> GetAccountByIdAsync(Guid id, Guid userId);
     Task<AccountDetailDto?> GetAccountDetailByIdAsync(Guid id, Guid userId);
     Task<IEnumerable<AccountDto>> GetAllAccountsAsync(Guid userId);
+    Task<IReadOnlyList<DashboardRecentTransactionDto>> GetRecentTransactionsAsync(Guid userId, int limit = 10, CancellationToken cancellationToken = default);
 }

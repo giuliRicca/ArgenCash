@@ -330,6 +330,15 @@ public class AccountService : IAccountService
         return accounts.Select(account => Map(account)).ToList();
     }
 
+    public async Task<IReadOnlyList<DashboardRecentTransactionDto>> GetRecentTransactionsAsync(
+        Guid userId,
+        int limit = 10,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedLimit = Math.Clamp(limit, 1, 50);
+        return await _accountRepository.GetRecentTransactionsAsync(userId, normalizedLimit, cancellationToken);
+    }
+
     private static AccountDto Map(AccountBalanceSnapshot account)
     {
         return new AccountDto
