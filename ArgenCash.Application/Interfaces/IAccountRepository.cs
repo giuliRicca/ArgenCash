@@ -13,6 +13,7 @@ public interface IAccountRepository
     Task<AccountBalanceSnapshot?> GetByIdAsync(Guid id, Guid userId);
     Task<AccountDetailSnapshot?> GetDetailByIdAsync(Guid id, Guid userId);
     Task<IEnumerable<AccountBalanceSnapshot>> GetAllAsync(Guid userId);
+    Task<IReadOnlyList<DashboardRecentTransactionDto>> GetRecentTransactionsAsync(Guid userId, int limit = 10, CancellationToken cancellationToken = default);
     Task<List<CreditAccountSettlementCandidateSnapshot>> GetCreditSettlementCandidatesAsync(Guid userId, CancellationToken cancellationToken = default);
     Task<decimal> GetCreditStatementNetExpenseAsync(Guid creditAccountId, DateTime fromUtc, DateTime toUtcExclusive, CancellationToken cancellationToken = default);
     Task SaveChangesAsync();

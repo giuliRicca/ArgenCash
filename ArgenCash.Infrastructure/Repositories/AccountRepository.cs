@@ -126,6 +126,48 @@ namespace ArgenCash.Infrastructure.Repositories
                 .ToListAsync();
         }
 
+        public async Task<IReadOnlyList<DashboardRecentTransactionDto>> GetRecentTransactionsAsync(
+            Guid userId,
+            int limit = 10,
+            CancellationToken cancellationToken = default)
+        {
+            var normalizedLimit = Math.Clamp(limit, 1, 50);
+
+            return await _context.Transactions
+                .AsNoTracking()
+                .Where(transaction => _context.Accounts.Any(account => account.Id == transaction.AccountId && account.UserId == userId))
+                .OrderByDescending(transaction => transaction.TransactionDate)
+                .Select(transaction => new DashboardRecentTransactionDto
+                {
+                    Id = transaction.Id,
+                    AccountId = transaction.AccountId,
+                    AccountName = _context.Accounts
+                        .Where(account => account.Id == transaction.AccountId)
+                        .Select(account => account.Name)
+                        .FirstOrDefault() ?? string.Empty,
+                    Amount = transaction.Amount,
+                    TransactionType = TransactionTypes.ToString(transaction.TransactionType),
+                    Currency = transaction.Currency,
+                    Description = transaction.Description,
+                    ConvertedAmountUsd = transaction.ConvertedAmountUSD,
+                    ConvertedAmountArs = transaction.ConvertedAmountARS,
+                    TransactionDate = transaction.TransactionDate,
+                    TransferGroupId = transaction.TransferGroupId,
+                    CounterpartyAccountId = transaction.CounterpartyAccountId,
+                    CounterpartyAccountName = _context.Accounts
+                        .Where(a => a.Id == transaction.CounterpartyAccountId)
+                        .Select(a => (string?)a.Name)
+                        .FirstOrDefault(),
+                    CategoryId = transaction.CategoryId,
+                    CategoryName = _context.Categories
+                        .Where(c => c.Id == transaction.CategoryId)
+                        .Select(c => (string?)c.Name)
+                        .FirstOrDefault()
+                })
+                .Take(normalizedLimit)
+                .ToListAsync(cancellationToken);
+        }
+
         public async Task<List<CreditAccountSettlementCandidateSnapshot>> GetCreditSettlementCandidatesAsync(
             Guid userId,
             CancellationToken cancellationToken = default)

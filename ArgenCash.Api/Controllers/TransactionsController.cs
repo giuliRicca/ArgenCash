@@ -35,6 +35,18 @@ public class TransactionsController : ApiControllerBase
         }
     }
 
+    [HttpGet("recent")]
+    public async Task<IActionResult> GetRecent([FromQuery] int limit = 10, CancellationToken cancellationToken = default)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
+        var transactions = await _accountService.GetRecentTransactionsAsync(userId, limit, cancellationToken);
+        return Ok(transactions);
+    }
+
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken = default)
     {
