@@ -144,23 +144,26 @@ jobs:
           $json = $config | ConvertTo-Json -Depth 8
           [System.IO.File]::WriteAllText($outFile, $json, [System.Text.UTF8Encoding]::new($false))
 
-      - name: Put app offline
+      - name: Validate FTP target directory
         shell: pwsh
         env:
-          MONSTERASP_FTP_SERVER: ${{ secrets.MONSTERASP_FTP_SERVER }}
-          MONSTERASP_FTP_USERNAME: ${{ secrets.MONSTERASP_FTP_USERNAME }}
-          MONSTERASP_FTP_PASSWORD: ${{ secrets.MONSTERASP_FTP_PASSWORD }}
           MONSTERASP_FTP_TARGET_DIR: ${{ secrets.MONSTERASP_FTP_TARGET_DIR }}
         run: |
-          $server = $env:MONSTERASP_FTP_SERVER.Trim()
-          if ($server -notmatch '^[a-zA-Z][a-zA-Z0-9+.-]*://') {
-            $server = "ftp://$server"
+          $targetDir = $env:MONSTERASP_FTP_TARGET_DIR.Trim()
+          if ([string]::IsNullOrWhiteSpace($targetDir)) {
+            throw "MONSTERASP_FTP_TARGET_DIR is empty. Set it to /wwwroot/."
           }
 
-          $targetDir = $env:MONSTERASP_FTP_TARGET_DIR.Trim('/')
-          $offlineUri = "$server/$targetDir/app_offline.htm"
+          if (-not $targetDir.EndsWith('/')) {
+            throw "MONSTERASP_FTP_TARGET_DIR must end with '/'. Example: /wwwroot/"
+          }
 
-          $offlineFilePath = Join-Path $env:RUNNER_TEMP 'app_offline.htm'
+      - name: Prepare app_offline package
+        shell: pwsh
+        run: |
+          $offlineDir = Join-Path $env:RUNNER_TEMP 'offline-on'
+          New-Item -ItemType Directory -Path $offlineDir -Force | Out-Null
+          $offlineFilePath = Join-Path $offlineDir 'app_offline.htm'
           $offlineHtml = @(
             '<!doctype html>',
             '<html lang="en">',
@@ -177,23 +180,20 @@ jobs:
           ) -join "`n"
           [System.IO.File]::WriteAllText($offlineFilePath, $offlineHtml, [System.Text.UTF8Encoding]::new($false))
 
-          $request = [System.Net.FtpWebRequest]::Create($offlineUri)
-          $request.Method = [System.Net.WebRequestMethods+Ftp]::UploadFile
-          $request.Credentials = [System.Net.NetworkCredential]::new($env:MONSTERASP_FTP_USERNAME, $env:MONSTERASP_FTP_PASSWORD)
-          $request.UseBinary = $true
-          $request.KeepAlive = $false
+      - name: Put app offline
+        id: put_offline
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.MONSTERASP_FTP_SERVER }}
+          username: ${{ secrets.MONSTERASP_FTP_USERNAME }}
+          password: ${{ secrets.MONSTERASP_FTP_PASSWORD }}
+          server-dir: ${{ secrets.MONSTERASP_FTP_TARGET_DIR }}
+          local-dir: ${{ runner.temp }}/offline-on/
+          dangerous-clean-slate: false
 
-          $bytes = [System.IO.File]::ReadAllBytes($offlineFilePath)
-          $request.ContentLength = $bytes.Length
-
-          $stream = $request.GetRequestStream()
-          $stream.Write($bytes, 0, $bytes.Length)
-          $stream.Close()
-
-          $response = $request.GetResponse()
-          $response.Close()
-
-          Start-Sleep -Seconds 5
+      - name: Wait for app unload
+        shell: pwsh
+        run: Start-Sleep -Seconds 5
 
       - name: Deploy published output to MonsterASP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
@@ -206,33 +206,12 @@ jobs:
           dangerous-clean-slate: false
 
       - name: Remove app_offline.htm
-        if: always()
-        shell: pwsh
-        env:
-          MONSTERASP_FTP_SERVER: ${{ secrets.MONSTERASP_FTP_SERVER }}
-          MONSTERASP_FTP_USERNAME: ${{ secrets.MONSTERASP_FTP_USERNAME }}
-          MONSTERASP_FTP_PASSWORD: ${{ secrets.MONSTERASP_FTP_PASSWORD }}
-          MONSTERASP_FTP_TARGET_DIR: ${{ secrets.MONSTERASP_FTP_TARGET_DIR }}
-        run: |
-          $server = $env:MONSTERASP_FTP_SERVER.Trim()
-          if ($server -notmatch '^[a-zA-Z][a-zA-Z0-9+.-]*://') {
-            $server = "ftp://$server"
-          }
-
-          $targetDir = $env:MONSTERASP_FTP_TARGET_DIR.Trim('/')
-          $offlineUri = "$server/$targetDir/app_offline.htm"
-
-          try {
-            $request = [System.Net.FtpWebRequest]::Create($offlineUri)
-            $request.Method = [System.Net.WebRequestMethods+Ftp]::DeleteFile
-            $request.Credentials = [System.Net.NetworkCredential]::new($env:MONSTERASP_FTP_USERNAME, $env:MONSTERASP_FTP_PASSWORD)
-            $request.UseBinary = $true
-            $request.KeepAlive = $false
-
-            $response = $request.GetResponse()
-            $response.Close()
-          }
-          catch {
-            Write-Warning "Could not delete app_offline.htm. The application might remain offline. $_"
-            throw
-          }
+        if: always() && steps.put_offline.conclusion == 'success'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.MONSTERASP_FTP_SERVER }}
+          username: ${{ secrets.MONSTERASP_FTP_USERNAME }}
+          password: ${{ secrets.MONSTERASP_FTP_PASSWORD }}
+          server-dir: ${{ secrets.MONSTERASP_FTP_TARGET_DIR }}
+          local-dir: ${{ env.PUBLISH_DIR }}/
+          dangerous-clean-slate: true
