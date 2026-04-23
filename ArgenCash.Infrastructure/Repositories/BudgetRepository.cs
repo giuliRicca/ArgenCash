@@ -41,6 +41,11 @@ public class BudgetRepository : IBudgetRepository
         DateTime toUtcExclusive,
         CancellationToken cancellationToken = default)
     {
+        var userAccounts = _context.Accounts
+            .AsNoTracking()
+            .Where(account => account.UserId == userId)
+            .Select(account => account.Id);
+
         return await _context.Transactions
             .AsNoTracking()
             .Where(transaction =>
@@ -48,7 +53,7 @@ public class BudgetRepository : IBudgetRepository
                 transaction.CategoryId.HasValue &&
                 transaction.TransactionDate >= fromUtc &&
                 transaction.TransactionDate < toUtcExclusive &&
-                _context.Accounts.Any(account => account.Id == transaction.AccountId && account.UserId == userId))
+                userAccounts.Contains(transaction.AccountId))
             .GroupBy(transaction => transaction.CategoryId!.Value)
             .Select(group => new CategoryExpenseTotalSnapshot
             {
