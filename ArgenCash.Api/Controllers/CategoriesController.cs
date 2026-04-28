@@ -17,26 +17,26 @@ public class CategoriesController : ApiControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll(CancellationToken cancellationToken = default)
     {
         if (!TryGetCurrentUserId(out var userId))
         {
             return Unauthorized();
         }
 
-        var categories = await _categoryService.GetAllForUserAsync(userId);
+        var categories = await _categoryService.GetAllForUserAsync(userId, cancellationToken);
         return Ok(categories);
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<IActionResult> GetById(Guid id)
+    public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken = default)
     {
-        var category = await _categoryService.GetByIdAsync(id);
+        var category = await _categoryService.GetByIdAsync(id, cancellationToken);
         return category is null ? NotFound() : Ok(category);
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreateCategoryRequest request)
+    public async Task<IActionResult> Create([FromBody] CreateCategoryRequest request, CancellationToken cancellationToken = default)
     {
         if (!TryGetCurrentUserId(out var userId))
         {
@@ -45,7 +45,7 @@ public class CategoriesController : ApiControllerBase
 
         try
         {
-            var categoryId = await _categoryService.CreateAsync(userId, request);
+            var categoryId = await _categoryService.CreateAsync(userId, request, cancellationToken);
             return CreatedAtAction(nameof(GetById), new { id = categoryId }, new { id = categoryId });
         }
         catch (ArgumentException ex)
@@ -55,14 +55,14 @@ public class CategoriesController : ApiControllerBase
     }
 
     [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> Delete(Guid id)
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken = default)
     {
         if (!TryGetCurrentUserId(out var userId))
         {
             return Unauthorized();
         }
 
-        var deleted = await _categoryService.DeleteAsync(id, userId);
+        var deleted = await _categoryService.DeleteAsync(id, userId, cancellationToken);
         return deleted ? NoContent() : NotFound();
     }
 

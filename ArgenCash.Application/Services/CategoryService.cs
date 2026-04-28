@@ -14,10 +14,9 @@ public class CategoryService : ICategoryService
 
     public async Task<List<CategoryDto>> GetAllForUserAsync(Guid userId, CancellationToken cancellationToken = default)
     {
-        var categories = await _repository.GetAllAsync(cancellationToken);
+        var categories = await _repository.GetVisibleForUserAsync(userId, cancellationToken);
 
         return categories
-            .Where(c => c.IsSystem || c.UserId == userId)
             .Select(Map)
             .ToList();
     }

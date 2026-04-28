@@ -52,6 +52,8 @@ namespace ArgenCash.Infrastructure.Configurations
 
             builder.HasIndex(t => t.ExchangeRateId);
             builder.HasIndex(t => t.TransferGroupId);
+            builder.HasIndex(t => new { t.AccountId, t.TransactionDate })
+                .IsDescending(false, true);
 
             builder.HasOne<Account>()
                 .WithMany()

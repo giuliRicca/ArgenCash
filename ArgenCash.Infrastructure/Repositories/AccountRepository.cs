@@ -69,7 +69,11 @@ namespace ArgenCash.Infrastructure.Repositories
             return MapAccountBalance(account, balancesByAccountId.GetValueOrDefault(account.Id));
         }
 
-        public async Task<AccountDetailSnapshot?> GetDetailByIdAsync(Guid id, Guid userId, CancellationToken cancellationToken = default)
+        public async Task<AccountDetailSnapshot?> GetDetailByIdAsync(
+            Guid id,
+            Guid userId,
+            int transactionLimit = 50,
+            CancellationToken cancellationToken = default)
         {
             var account = await GetByIdAsync(id, userId, cancellationToken);
 
@@ -78,11 +82,18 @@ namespace ArgenCash.Infrastructure.Repositories
                 return null;
             }
 
-            var transactions = await _context.Transactions
-                .AsNoTracking()
-                .Where(transaction => transaction.AccountId == id)
-                .OrderByDescending(transaction => transaction.TransactionDate)
-                .Select(transaction => new AccountTransactionDto
+            var normalizedTransactionLimit = Math.Clamp(transactionLimit, 1, 200);
+            var transactions = await (
+                from transaction in _context.Transactions.AsNoTracking()
+                join counterpartyAccount in _context.Accounts.AsNoTracking()
+                    on transaction.CounterpartyAccountId equals (Guid?)counterpartyAccount.Id into counterpartyAccounts
+                from counterpartyAccount in counterpartyAccounts.DefaultIfEmpty()
+                join category in _context.Categories.AsNoTracking()
+                    on transaction.CategoryId equals (Guid?)category.Id into categories
+                from category in categories.DefaultIfEmpty()
+                where transaction.AccountId == id
+                orderby transaction.TransactionDate descending
+                select new AccountTransactionDto
                 {
                     Id = transaction.Id,
                     Amount = transaction.Amount,
@@ -94,16 +105,11 @@ namespace ArgenCash.Infrastructure.Repositories
                     TransactionDate = transaction.TransactionDate,
                     TransferGroupId = transaction.TransferGroupId,
                     CounterpartyAccountId = transaction.CounterpartyAccountId,
-                    CounterpartyAccountName = _context.Accounts
-                        .Where(a => a.Id == transaction.CounterpartyAccountId)
-                        .Select(a => (string?)a.Name)
-                        .FirstOrDefault(),
+                    CounterpartyAccountName = counterpartyAccount == null ? null : counterpartyAccount.Name,
                     CategoryId = transaction.CategoryId,
-                    CategoryName = _context.Categories
-                        .Where(c => c.Id == transaction.CategoryId)
-                        .Select(c => (string?)c.Name)
-                        .FirstOrDefault()
+                    CategoryName = category == null ? null : category.Name
                 })
+                .Take(normalizedTransactionLimit)
                 .ToListAsync(cancellationToken);
 
             return new AccountDetailSnapshot
@@ -155,18 +161,22 @@ namespace ArgenCash.Infrastructure.Repositories
         {
             var normalizedLimit = Math.Clamp(limit, 1, 50);
 
-            return await _context.Transactions
-                .AsNoTracking()
-                .Where(transaction => _context.Accounts.Any(account => account.Id == transaction.AccountId && account.UserId == userId))
-                .OrderByDescending(transaction => transaction.TransactionDate)
-                .Select(transaction => new DashboardRecentTransactionDto
+            return await (
+                from transaction in _context.Transactions.AsNoTracking()
+                join account in _context.Accounts.AsNoTracking().Where(account => account.UserId == userId)
+                    on transaction.AccountId equals account.Id
+                join counterpartyAccount in _context.Accounts.AsNoTracking()
+                    on transaction.CounterpartyAccountId equals (Guid?)counterpartyAccount.Id into counterpartyAccounts
+                from counterpartyAccount in counterpartyAccounts.DefaultIfEmpty()
+                join category in _context.Categories.AsNoTracking()
+                    on transaction.CategoryId equals (Guid?)category.Id into categories
+                from category in categories.DefaultIfEmpty()
+                orderby transaction.TransactionDate descending
+                select new DashboardRecentTransactionDto
                 {
                     Id = transaction.Id,
                     AccountId = transaction.AccountId,
-                    AccountName = _context.Accounts
-                        .Where(account => account.Id == transaction.AccountId)
-                        .Select(account => account.Name)
-                        .FirstOrDefault() ?? string.Empty,
+                    AccountName = account.Name,
                     Amount = transaction.Amount,
                     TransactionType = TransactionTypes.ToString(transaction.TransactionType),
                     Currency = transaction.Currency,
@@ -176,15 +186,9 @@ namespace ArgenCash.Infrastructure.Repositories
                     TransactionDate = transaction.TransactionDate,
                     TransferGroupId = transaction.TransferGroupId,
                     CounterpartyAccountId = transaction.CounterpartyAccountId,
-                    CounterpartyAccountName = _context.Accounts
-                        .Where(a => a.Id == transaction.CounterpartyAccountId)
-                        .Select(a => (string?)a.Name)
-                        .FirstOrDefault(),
+                    CounterpartyAccountName = counterpartyAccount == null ? null : counterpartyAccount.Name,
                     CategoryId = transaction.CategoryId,
-                    CategoryName = _context.Categories
-                        .Where(c => c.Id == transaction.CategoryId)
-                        .Select(c => (string?)c.Name)
-                        .FirstOrDefault()
+                    CategoryName = category == null ? null : category.Name
                 })
                 .Take(normalizedLimit)
                 .ToListAsync(cancellationToken);

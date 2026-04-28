@@ -36,14 +36,17 @@ public class AccountsController : ApiControllerBase
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<IActionResult> GetAccountById(Guid id, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetAccountById(
+        Guid id,
+        [FromQuery] int transactionLimit = 50,
+        CancellationToken cancellationToken = default)
     {
         if (!TryGetCurrentUserId(out var userId))
         {
             return Unauthorized();
         }
 
-        var account = await _accountService.GetAccountDetailByIdAsync(id, userId, cancellationToken);
+        var account = await _accountService.GetAccountDetailByIdAsync(id, userId, transactionLimit, cancellationToken);
 
         return account is null ? NotFound() : Ok(account);
     }
