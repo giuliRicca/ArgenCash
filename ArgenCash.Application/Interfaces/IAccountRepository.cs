@@ -11,7 +11,7 @@ public interface IAccountRepository
     Task<IReadOnlyList<Transaction>> GetTransactionsByTransferGroupIdAsync(Guid transferGroupId, Guid userId, CancellationToken cancellationToken = default);
     Task DeleteTransactionAsync(Transaction transaction, CancellationToken cancellationToken = default);
     Task<AccountBalanceSnapshot?> GetByIdAsync(Guid id, Guid userId, CancellationToken cancellationToken = default);
-    Task<AccountDetailSnapshot?> GetDetailByIdAsync(Guid id, Guid userId, CancellationToken cancellationToken = default);
+    Task<AccountDetailSnapshot?> GetDetailByIdAsync(Guid id, Guid userId, int transactionLimit = 50, CancellationToken cancellationToken = default);
     Task<IEnumerable<AccountBalanceSnapshot>> GetAllAsync(Guid userId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<DashboardRecentTransactionDto>> GetRecentTransactionsAsync(Guid userId, int limit = 10, CancellationToken cancellationToken = default);
     Task<List<CreditAccountSettlementCandidateSnapshot>> GetCreditSettlementCandidatesAsync(Guid userId, CancellationToken cancellationToken = default);

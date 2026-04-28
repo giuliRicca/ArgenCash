@@ -316,9 +316,14 @@ public class AccountService : IAccountService
         return account is null ? null : Map(account);
     }
 
-    public async Task<AccountDetailDto?> GetAccountDetailByIdAsync(Guid id, Guid userId, CancellationToken cancellationToken = default)
+    public async Task<AccountDetailDto?> GetAccountDetailByIdAsync(
+        Guid id,
+        Guid userId,
+        int transactionLimit = 50,
+        CancellationToken cancellationToken = default)
     {
-        var account = await _accountRepository.GetDetailByIdAsync(id, userId, cancellationToken);
+        var normalizedTransactionLimit = Math.Clamp(transactionLimit, 1, 200);
+        var account = await _accountRepository.GetDetailByIdAsync(id, userId, normalizedTransactionLimit, cancellationToken);
 
         return account is null ? null : MapDetail(account);
     }

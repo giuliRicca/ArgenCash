@@ -10,7 +10,7 @@ public interface IAccountService
     Task<Guid> CreateTransferAsync(Guid userId, CreateTransferRequest request, CancellationToken cancellationToken = default);
     Task<bool> DeleteTransactionAsync(Guid transactionId, Guid userId, CancellationToken cancellationToken = default);
     Task<AccountDto?> GetAccountByIdAsync(Guid id, Guid userId, CancellationToken cancellationToken = default);
-    Task<AccountDetailDto?> GetAccountDetailByIdAsync(Guid id, Guid userId, CancellationToken cancellationToken = default);
+    Task<AccountDetailDto?> GetAccountDetailByIdAsync(Guid id, Guid userId, int transactionLimit = 50, CancellationToken cancellationToken = default);
     Task<IEnumerable<AccountDto>> GetAllAccountsAsync(Guid userId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<DashboardRecentTransactionDto>> GetRecentTransactionsAsync(Guid userId, int limit = 10, CancellationToken cancellationToken = default);
 }
