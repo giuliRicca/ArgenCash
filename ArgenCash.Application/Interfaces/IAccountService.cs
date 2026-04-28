@@ -12,5 +12,6 @@ public interface IAccountService
     Task<AccountDto?> GetAccountByIdAsync(Guid id, Guid userId, CancellationToken cancellationToken = default);
     Task<AccountDetailDto?> GetAccountDetailByIdAsync(Guid id, Guid userId, int transactionLimit = 50, CancellationToken cancellationToken = default);
     Task<IEnumerable<AccountDto>> GetAllAccountsAsync(Guid userId, CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<DashboardRecentTransactionDto>> GetRecentTransactionsAsync(Guid userId, int limit = 10, CancellationToken cancellationToken = default);
+    Task<PagedResultDto<DashboardRecentTransactionDto>> GetRecentTransactionsAsync(Guid userId, int page = 1, int pageSize = 10, CancellationToken cancellationToken = default);
+    Task<MonthlyTransactionSummaryDto> GetMonthlyTransactionSummaryAsync(Guid userId, int? month = null, int? year = null, CancellationToken cancellationToken = default);
 }

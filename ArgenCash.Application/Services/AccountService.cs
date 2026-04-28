@@ -335,13 +335,42 @@ public class AccountService : IAccountService
         return accounts.Select(account => Map(account)).ToList();
     }
 
-    public async Task<IReadOnlyList<DashboardRecentTransactionDto>> GetRecentTransactionsAsync(
+    public async Task<PagedResultDto<DashboardRecentTransactionDto>> GetRecentTransactionsAsync(
         Guid userId,
-        int limit = 10,
+        int page = 1,
+        int pageSize = 10,
         CancellationToken cancellationToken = default)
     {
-        var normalizedLimit = Math.Clamp(limit, 1, 50);
-        return await _accountRepository.GetRecentTransactionsAsync(userId, normalizedLimit, cancellationToken);
+        var normalizedPage = Math.Max(page, 1);
+        var normalizedPageSize = Math.Clamp(pageSize, 1, 50);
+
+        return await _accountRepository.GetRecentTransactionsAsync(userId, normalizedPage, normalizedPageSize, cancellationToken);
+    }
+
+    public async Task<MonthlyTransactionSummaryDto> GetMonthlyTransactionSummaryAsync(
+        Guid userId,
+        int? month = null,
+        int? year = null,
+        CancellationToken cancellationToken = default)
+    {
+        var now = DateTime.UtcNow;
+        var normalizedMonth = month ?? now.Month;
+        var normalizedYear = year ?? now.Year;
+
+        if (normalizedMonth is < 1 or > 12)
+        {
+            throw new ArgumentException("Month must be between 1 and 12.", nameof(month));
+        }
+
+        if (normalizedYear < 1)
+        {
+            throw new ArgumentException("Year must be greater than zero.", nameof(year));
+        }
+
+        var fromUtc = new DateTime(normalizedYear, normalizedMonth, 1, 0, 0, 0, DateTimeKind.Utc);
+        var toUtcExclusive = fromUtc.AddMonths(1);
+
+        return await _accountRepository.GetMonthlyTransactionSummaryAsync(userId, fromUtc, toUtcExclusive, cancellationToken);
     }
 
     private static AccountDto Map(AccountBalanceSnapshot account)

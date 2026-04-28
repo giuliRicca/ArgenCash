@@ -36,15 +36,34 @@ public class TransactionsController : ApiControllerBase
     }
 
     [HttpGet("recent")]
-    public async Task<IActionResult> GetRecent([FromQuery] int limit = 10, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetRecent([FromQuery] int page = 1, [FromQuery] int pageSize = 10, CancellationToken cancellationToken = default)
     {
         if (!TryGetCurrentUserId(out var userId))
         {
             return Unauthorized();
         }
 
-        var transactions = await _accountService.GetRecentTransactionsAsync(userId, limit, cancellationToken);
+        var transactions = await _accountService.GetRecentTransactionsAsync(userId, page, pageSize, cancellationToken);
         return Ok(transactions);
+    }
+
+    [HttpGet("monthly-summary")]
+    public async Task<IActionResult> GetMonthlySummary([FromQuery] int? month = null, [FromQuery] int? year = null, CancellationToken cancellationToken = default)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
+        try
+        {
+            var summary = await _accountService.GetMonthlyTransactionSummaryAsync(userId, month, year, cancellationToken);
+            return Ok(summary);
+        }
+        catch (ArgumentException ex)
+        {
+            return ValidationProblem(detail: ex.Message);
+        }
     }
 
     [HttpDelete("{id:guid}")]
