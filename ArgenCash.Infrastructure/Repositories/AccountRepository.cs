@@ -54,16 +54,24 @@ namespace ArgenCash.Infrastructure.Repositories
             return Task.CompletedTask;
         }
 
-        public async Task<AccountBalanceSnapshot?> GetByIdAsync(Guid id, Guid userId)
+        public async Task<AccountBalanceSnapshot?> GetByIdAsync(Guid id, Guid userId, CancellationToken cancellationToken = default)
         {
-            return await BuildAccountBalanceQuery(userId)
-                .SingleOrDefaultAsync(account => account.Id == id);
+            var account = await _context.Accounts
+                .AsNoTracking()
+                .SingleOrDefaultAsync(account => account.Id == id && account.UserId == userId, cancellationToken);
+
+            if (account is null)
+            {
+                return null;
+            }
+
+            var balancesByAccountId = await GetBalancesByAccountIdAsync([account.Id], cancellationToken);
+            return MapAccountBalance(account, balancesByAccountId.GetValueOrDefault(account.Id));
         }
 
-        public async Task<AccountDetailSnapshot?> GetDetailByIdAsync(Guid id, Guid userId)
+        public async Task<AccountDetailSnapshot?> GetDetailByIdAsync(Guid id, Guid userId, CancellationToken cancellationToken = default)
         {
-            var account = await BuildAccountBalanceQuery(userId)
-                .SingleOrDefaultAsync(account => account.Id == id);
+            var account = await GetByIdAsync(id, userId, cancellationToken);
 
             if (account is null)
             {
@@ -96,7 +104,7 @@ namespace ArgenCash.Infrastructure.Repositories
                         .Select(c => (string?)c.Name)
                         .FirstOrDefault()
                 })
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             return new AccountDetailSnapshot
             {
@@ -119,11 +127,25 @@ namespace ArgenCash.Infrastructure.Repositories
             await _context.SaveChangesAsync();
         }
 
-        public async Task<IEnumerable<AccountBalanceSnapshot>> GetAllAsync(Guid userId)
+        public async Task<IEnumerable<AccountBalanceSnapshot>> GetAllAsync(Guid userId, CancellationToken cancellationToken = default)
         {
-            return await BuildAccountBalanceQuery(userId)
+            var accounts = await _context.Accounts
+                .AsNoTracking()
+                .Where(account => account.UserId == userId)
                 .OrderBy(account => account.Name)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
+
+            if (accounts.Count == 0)
+            {
+                return [];
+            }
+
+            var accountIds = accounts.Select(account => account.Id).ToArray();
+            var balancesByAccountId = await GetBalancesByAccountIdAsync(accountIds, cancellationToken);
+
+            return accounts
+                .Select(account => MapAccountBalance(account, balancesByAccountId.GetValueOrDefault(account.Id)))
+                .ToList();
         }
 
         public async Task<IReadOnlyList<DashboardRecentTransactionDto>> GetRecentTransactionsAsync(
@@ -209,33 +231,50 @@ namespace ArgenCash.Infrastructure.Repositories
                 .SumAsync(cancellationToken) ?? 0m;
         }
 
-        private IQueryable<AccountBalanceSnapshot> BuildAccountBalanceQuery(Guid userId)
+        private async Task<Dictionary<Guid, AccountBalanceTotals>> GetBalancesByAccountIdAsync(Guid[] accountIds, CancellationToken cancellationToken = default)
         {
-            return _context.Accounts
+            if (accountIds.Length == 0)
+            {
+                return [];
+            }
+
+            return await _context.Transactions
                 .AsNoTracking()
-                .Where(account => account.UserId == userId)
-                .Select(account => new AccountBalanceSnapshot
+                .Where(transaction => accountIds.Contains(transaction.AccountId))
+                .GroupBy(transaction => transaction.AccountId)
+                .Select(group => new AccountBalanceTotals
                 {
-                    Id = account.Id,
-                    Name = account.Name,
-                    CurrencyCode = account.CurrencyCode,
-                    ExchangeRateType = account.ExchangeRateType,
-                    AccountType = account.AccountType,
-                    FundingAccountId = account.FundingAccountId,
-                    PaymentDayOfMonth = account.PaymentDayOfMonth,
-                    BalanceInAccountCurrency = _context.Transactions
-                        .Where(transaction => transaction.AccountId == account.Id)
-                        .Select(transaction => (decimal?)(transaction.TransactionType == TransactionType.Expense ? -transaction.Amount : transaction.Amount))
-                        .Sum() ?? 0m,
-                    BalanceUsd = _context.Transactions
-                        .Where(transaction => transaction.AccountId == account.Id)
-                        .Select(transaction => (decimal?)(transaction.TransactionType == TransactionType.Expense ? -transaction.ConvertedAmountUSD : transaction.ConvertedAmountUSD))
-                        .Sum() ?? 0m,
-                    BalanceArs = _context.Transactions
-                        .Where(transaction => transaction.AccountId == account.Id)
-                        .Select(transaction => (decimal?)(transaction.TransactionType == TransactionType.Expense ? -transaction.ConvertedAmountARS : transaction.ConvertedAmountARS))
-                        .Sum() ?? 0m,
-                });
+                    AccountId = group.Key,
+                    BalanceInAccountCurrency = group.Sum(transaction => transaction.TransactionType == TransactionType.Expense ? -transaction.Amount : transaction.Amount),
+                    BalanceUsd = group.Sum(transaction => transaction.TransactionType == TransactionType.Expense ? -transaction.ConvertedAmountUSD : transaction.ConvertedAmountUSD),
+                    BalanceArs = group.Sum(transaction => transaction.TransactionType == TransactionType.Expense ? -transaction.ConvertedAmountARS : transaction.ConvertedAmountARS)
+                })
+                .ToDictionaryAsync(balance => balance.AccountId, cancellationToken);
+        }
+
+        private static AccountBalanceSnapshot MapAccountBalance(Account account, AccountBalanceTotals? balances)
+        {
+            return new AccountBalanceSnapshot
+            {
+                Id = account.Id,
+                Name = account.Name,
+                CurrencyCode = account.CurrencyCode,
+                ExchangeRateType = account.ExchangeRateType,
+                AccountType = account.AccountType,
+                FundingAccountId = account.FundingAccountId,
+                PaymentDayOfMonth = account.PaymentDayOfMonth,
+                BalanceInAccountCurrency = balances?.BalanceInAccountCurrency ?? 0m,
+                BalanceUsd = balances?.BalanceUsd ?? 0m,
+                BalanceArs = balances?.BalanceArs ?? 0m,
+            };
+        }
+
+        private sealed class AccountBalanceTotals
+        {
+            public Guid AccountId { get; init; }
+            public decimal BalanceInAccountCurrency { get; init; }
+            public decimal BalanceUsd { get; init; }
+            public decimal BalanceArs { get; init; }
         }
 
     }

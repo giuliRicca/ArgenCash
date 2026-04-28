@@ -36,27 +36,27 @@ public class AccountsController : ApiControllerBase
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<IActionResult> GetAccountById(Guid id)
+    public async Task<IActionResult> GetAccountById(Guid id, CancellationToken cancellationToken = default)
     {
         if (!TryGetCurrentUserId(out var userId))
         {
             return Unauthorized();
         }
 
-        var account = await _accountService.GetAccountDetailByIdAsync(id, userId);
+        var account = await _accountService.GetAccountDetailByIdAsync(id, userId, cancellationToken);
 
         return account is null ? NotFound() : Ok(account);
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAllAccounts()
+    public async Task<IActionResult> GetAllAccounts(CancellationToken cancellationToken = default)
     {
         if (!TryGetCurrentUserId(out var userId))
         {
             return Unauthorized();
         }
 
-        var accounts = await _accountService.GetAllAccountsAsync(userId);
+        var accounts = await _accountService.GetAllAccountsAsync(userId, cancellationToken);
         return Ok(accounts);
     }
 

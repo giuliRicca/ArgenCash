@@ -309,23 +309,23 @@ public class AccountService : IAccountService
         return true;
     }
 
-    public async Task<AccountDto?> GetAccountByIdAsync(Guid id, Guid userId)
+    public async Task<AccountDto?> GetAccountByIdAsync(Guid id, Guid userId, CancellationToken cancellationToken = default)
     {
-        var account = await _accountRepository.GetByIdAsync(id, userId);
+        var account = await _accountRepository.GetByIdAsync(id, userId, cancellationToken);
 
         return account is null ? null : Map(account);
     }
 
-    public async Task<AccountDetailDto?> GetAccountDetailByIdAsync(Guid id, Guid userId)
+    public async Task<AccountDetailDto?> GetAccountDetailByIdAsync(Guid id, Guid userId, CancellationToken cancellationToken = default)
     {
-        var account = await _accountRepository.GetDetailByIdAsync(id, userId);
+        var account = await _accountRepository.GetDetailByIdAsync(id, userId, cancellationToken);
 
         return account is null ? null : MapDetail(account);
     }
 
-    public async Task<IEnumerable<AccountDto>> GetAllAccountsAsync(Guid userId)
+    public async Task<IEnumerable<AccountDto>> GetAllAccountsAsync(Guid userId, CancellationToken cancellationToken = default)
     {
-        var accounts = await _accountRepository.GetAllAsync(userId);
+        var accounts = await _accountRepository.GetAllAsync(userId, cancellationToken);
 
         return accounts.Select(account => Map(account)).ToList();
     }
