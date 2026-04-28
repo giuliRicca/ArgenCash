@@ -154,14 +154,17 @@ namespace ArgenCash.Infrastructure.Repositories
                 .ToList();
         }
 
-        public async Task<IReadOnlyList<DashboardRecentTransactionDto>> GetRecentTransactionsAsync(
+        public async Task<PagedResultDto<DashboardRecentTransactionDto>> GetRecentTransactionsAsync(
             Guid userId,
-            int limit = 10,
+            int page = 1,
+            int pageSize = 10,
             CancellationToken cancellationToken = default)
         {
-            var normalizedLimit = Math.Clamp(limit, 1, 50);
+            var normalizedPage = Math.Max(page, 1);
+            var normalizedPageSize = Math.Clamp(pageSize, 1, 50);
+            var skip = (normalizedPage - 1) * normalizedPageSize;
 
-            return await (
+            var query =
                 from transaction in _context.Transactions.AsNoTracking()
                 join account in _context.Accounts.AsNoTracking().Where(account => account.UserId == userId)
                     on transaction.AccountId equals account.Id
@@ -171,7 +174,6 @@ namespace ArgenCash.Infrastructure.Repositories
                 join category in _context.Categories.AsNoTracking()
                     on transaction.CategoryId equals (Guid?)category.Id into categories
                 from category in categories.DefaultIfEmpty()
-                orderby transaction.TransactionDate descending
                 select new DashboardRecentTransactionDto
                 {
                     Id = transaction.Id,
@@ -189,9 +191,60 @@ namespace ArgenCash.Infrastructure.Repositories
                     CounterpartyAccountName = counterpartyAccount == null ? null : counterpartyAccount.Name,
                     CategoryId = transaction.CategoryId,
                     CategoryName = category == null ? null : category.Name
-                })
-                .Take(normalizedLimit)
+                };
+
+            var totalCount = await query.CountAsync(cancellationToken);
+            var items = await query
+                .OrderByDescending(transaction => transaction.TransactionDate)
+                .ThenByDescending(transaction => transaction.Id)
+                .Skip(skip)
+                .Take(normalizedPageSize)
                 .ToListAsync(cancellationToken);
+
+            return new PagedResultDto<DashboardRecentTransactionDto>
+            {
+                Items = items,
+                Page = normalizedPage,
+                PageSize = normalizedPageSize,
+                TotalCount = totalCount,
+                TotalPages = totalCount == 0 ? 0 : (int)Math.Ceiling(totalCount / (double)normalizedPageSize)
+            };
+        }
+
+        public async Task<MonthlyTransactionSummaryDto> GetMonthlyTransactionSummaryAsync(
+            Guid userId,
+            DateTime fromUtc,
+            DateTime toUtcExclusive,
+            CancellationToken cancellationToken = default)
+        {
+            var transactions = await (
+                from transaction in _context.Transactions.AsNoTracking()
+                join account in _context.Accounts.AsNoTracking().Where(account => account.UserId == userId)
+                    on transaction.AccountId equals account.Id
+                where transaction.TransactionDate >= fromUtc &&
+                      transaction.TransactionDate < toUtcExclusive &&
+                      transaction.TransferGroupId == null
+                group transaction by transaction.TransactionType into groupedTransactions
+                select new
+                {
+                    TransactionType = groupedTransactions.Key,
+                    TotalUsd = groupedTransactions.Sum(transaction => transaction.ConvertedAmountUSD)
+                })
+                .ToListAsync(cancellationToken);
+
+            var incomeUsd = transactions
+                .Where(transaction => transaction.TransactionType == TransactionType.Income)
+                .Sum(transaction => transaction.TotalUsd);
+            var expenseUsd = transactions
+                .Where(transaction => transaction.TransactionType == TransactionType.Expense)
+                .Sum(transaction => transaction.TotalUsd);
+
+            return new MonthlyTransactionSummaryDto
+            {
+                IncomeUsd = incomeUsd,
+                ExpenseUsd = expenseUsd,
+                NetUsd = incomeUsd - expenseUsd
+            };
         }
 
         public async Task<List<CreditAccountSettlementCandidateSnapshot>> GetCreditSettlementCandidatesAsync(
