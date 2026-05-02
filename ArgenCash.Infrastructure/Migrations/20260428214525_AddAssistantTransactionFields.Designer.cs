@@ -3,6 +3,7 @@ using System;
 using ArgenCash.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ArgenCash.Infrastructure.Migrations
 {
     [DbContext(typeof(ArgenCashDbContext))]
-    partial class ArgenCashDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260428214525_AddAssistantTransactionFields")]
+    partial class AddAssistantTransactionFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -80,39 +83,6 @@ namespace ArgenCash.Infrastructure.Migrations
 
                             t.HasCheckConstraint("CK_Accounts_ExchangeRateType_Allowed", "\"ExchangeRateType\" IN ('OFFICIAL', 'CCL', 'MEP', 'BLUE', 'CRYPTO')");
                         });
-                });
-
-            modelBuilder.Entity("ArgenCash.Domain.Entities.AssistantPreferences", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("DefaultExpenseAccountId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("DefaultIncomeAccountId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DefaultExpenseAccountId");
-
-                    b.HasIndex("DefaultIncomeAccountId");
-
-                    b.HasIndex("UserId")
-                        .IsUnique();
-
-                    b.ToTable("AssistantPreferences");
                 });
 
             modelBuilder.Entity("ArgenCash.Domain.Entities.Budget", b =>
@@ -418,10 +388,6 @@ namespace ArgenCash.Infrastructure.Migrations
                         .HasPrecision(19, 4)
                         .HasColumnType("numeric(19,4)");
 
-                    b.Property<string>("AssistantRawInput")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
                     b.Property<Guid?>("CategoryId")
                         .HasColumnType("uuid");
 
@@ -536,25 +502,6 @@ namespace ArgenCash.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict);
-                });
-
-            modelBuilder.Entity("ArgenCash.Domain.Entities.AssistantPreferences", b =>
-                {
-                    b.HasOne("ArgenCash.Domain.Entities.Account", null)
-                        .WithMany()
-                        .HasForeignKey("DefaultExpenseAccountId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("ArgenCash.Domain.Entities.Account", null)
-                        .WithMany()
-                        .HasForeignKey("DefaultIncomeAccountId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("ArgenCash.Domain.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("ArgenCash.Domain.Entities.Budget", b =>

@@ -16,6 +16,7 @@ public static class DependencyInjection
         services.AddScoped<ICategoryService, CategoryService>();
         services.AddScoped<IBudgetService, BudgetService>();
         services.AddScoped<ICreditCardSettlementService, CreditCardSettlementService>();
+        services.AddScoped<IAssistantService, AssistantService>();
 
         return services;
     }

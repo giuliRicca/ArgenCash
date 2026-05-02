@@ -15,6 +15,7 @@ public interface IAccountRepository
     Task<IEnumerable<AccountBalanceSnapshot>> GetAllAsync(Guid userId, CancellationToken cancellationToken = default);
     Task<PagedResultDto<DashboardRecentTransactionDto>> GetRecentTransactionsAsync(Guid userId, int page = 1, int pageSize = 10, CancellationToken cancellationToken = default);
     Task<MonthlyTransactionSummaryDto> GetMonthlyTransactionSummaryAsync(Guid userId, DateTime fromUtc, DateTime toUtcExclusive, CancellationToken cancellationToken = default);
+    Task<bool> HasDuplicateTransactionAsync(Guid userId, Guid accountId, decimal amount, TransactionType transactionType, Guid? categoryId, DateTime fromUtc, DateTime toUtcExclusive, CancellationToken cancellationToken = default);
     Task<List<CreditAccountSettlementCandidateSnapshot>> GetCreditSettlementCandidatesAsync(Guid userId, CancellationToken cancellationToken = default);
     Task<decimal> GetCreditStatementNetExpenseAsync(Guid creditAccountId, DateTime fromUtc, DateTime toUtcExclusive, CancellationToken cancellationToken = default);
     Task SaveChangesAsync();

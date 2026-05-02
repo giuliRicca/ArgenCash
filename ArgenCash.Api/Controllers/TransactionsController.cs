@@ -1,4 +1,5 @@
 using ArgenCash.Application.Interfaces;
+using ArgenCash.Application.Exceptions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -63,6 +64,10 @@ public class TransactionsController : ApiControllerBase
         catch (ArgumentException ex)
         {
             return ValidationProblem(detail: ex.Message);
+        }
+        catch (DuplicateTransactionException ex)
+        {
+            return Conflict(new { code = "POSSIBLE_DUPLICATE", detail = ex.Message });
         }
     }
 
