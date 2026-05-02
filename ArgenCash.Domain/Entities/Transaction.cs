@@ -17,12 +17,15 @@ namespace ArgenCash.Domain.Entities
         public Guid? CounterpartyAccountId { get; private set; }
         public Guid? CategoryId { get; private set; }
         public DateTime TransactionDate { get; private set; }
+        public TransactionSource Source { get; private set; }
+        public string? AssistantRawInput { get; private set; }
         private Transaction() { }
 
-        public static Transaction Create(Guid accountId, decimal amount, string currency, TransactionType transactionType, string? description, decimal convertedAmountUSD, decimal convertedAmountARS, Guid? exchangeRateId, Guid? categoryId = null, Guid? transferGroupId = null, Guid? counterpartyAccountId = null)
+        public static Transaction Create(Guid accountId, decimal amount, string currency, TransactionType transactionType, string? description, decimal convertedAmountUSD, decimal convertedAmountARS, Guid? exchangeRateId, Guid? categoryId = null, Guid? transferGroupId = null, Guid? counterpartyAccountId = null, DateTime? transactionDate = null, TransactionSource source = TransactionSource.Manual, string? assistantRawInput = null)
         {
             var normalizedCurrency = NormalizeCurrencyCode(currency, nameof(currency));
             var normalizedDescription = NormalizeDescription(description);
+            var normalizedAssistantRawInput = NormalizeAssistantRawInput(assistantRawInput);
 
             if (accountId == Guid.Empty)
                 throw new ArgumentException("Account id cannot be empty.", nameof(accountId));
@@ -57,7 +60,9 @@ namespace ArgenCash.Domain.Entities
                 TransferGroupId = transferGroupId,
                 CounterpartyAccountId = counterpartyAccountId,
                 CategoryId = categoryId,
-                TransactionDate = DateTime.UtcNow
+                TransactionDate = transactionDate ?? DateTime.UtcNow,
+                Source = source,
+                AssistantRawInput = normalizedAssistantRawInput
             };
         }
 
@@ -122,6 +127,22 @@ namespace ArgenCash.Domain.Entities
             }
 
             return normalizedDescription;
+        }
+
+        private static string? NormalizeAssistantRawInput(string? assistantRawInput)
+        {
+            if (string.IsNullOrWhiteSpace(assistantRawInput))
+            {
+                return null;
+            }
+
+            var normalizedAssistantRawInput = assistantRawInput.Trim();
+            if (normalizedAssistantRawInput.Length > 1000)
+            {
+                throw new ArgumentException("Assistant raw input cannot exceed 1000 characters.", nameof(assistantRawInput));
+            }
+
+            return normalizedAssistantRawInput;
         }
     }
 }

@@ -247,6 +247,29 @@ namespace ArgenCash.Infrastructure.Repositories
             };
         }
 
+        public async Task<bool> HasDuplicateTransactionAsync(
+            Guid userId,
+            Guid accountId,
+            decimal amount,
+            TransactionType transactionType,
+            Guid? categoryId,
+            DateTime fromUtc,
+            DateTime toUtcExclusive,
+            CancellationToken cancellationToken = default)
+        {
+            return await _context.Transactions
+                .AsNoTracking()
+                .AnyAsync(
+                    transaction => transaction.AccountId == accountId &&
+                                   transaction.Amount == amount &&
+                                   transaction.TransactionType == transactionType &&
+                                   transaction.CategoryId == categoryId &&
+                                   transaction.TransactionDate >= fromUtc &&
+                                   transaction.TransactionDate < toUtcExclusive &&
+                                   _context.Accounts.Any(account => account.Id == transaction.AccountId && account.UserId == userId),
+                    cancellationToken);
+        }
+
         public async Task<List<CreditAccountSettlementCandidateSnapshot>> GetCreditSettlementCandidatesAsync(
             Guid userId,
             CancellationToken cancellationToken = default)

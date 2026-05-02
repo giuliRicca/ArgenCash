@@ -1,6 +1,7 @@
 <Solution>
   <Project Path="ArgenCash.Api/ArgenCash.Api.csproj" />
   <Project Path="ArgenCash.Application/ArgenCash.Application.csproj" />
+  <Project Path="ArgenCash.Application.Tests/ArgenCash.Application.Tests.csproj" />
   <Project Path="ArgenCash.Domain/ArgenCash.Domain.csproj" />
   <Project Path="ArgenCash.Infrastructure/ArgenCash.Infrastructure.csproj" />
 </Solution>

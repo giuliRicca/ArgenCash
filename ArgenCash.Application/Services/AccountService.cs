@@ -1,3 +1,4 @@
+using ArgenCash.Application.Exceptions;
 using ArgenCash.Application.Interfaces;
 using ArgenCash.Domain.Entities;
 
@@ -8,15 +9,18 @@ public class AccountService : IAccountService
     private readonly IAccountRepository _accountRepository;
     private readonly ICategoryRepository _categoryRepository;
     private readonly IExchangeRateResolver _exchangeRateResolver;
+    private readonly ILearnedCategoryMappingRepository _learnedCategoryMappingRepository;
 
     public AccountService(
         IAccountRepository accountRepository,
         ICategoryRepository categoryRepository,
-        IExchangeRateResolver exchangeRateResolver)
+        IExchangeRateResolver exchangeRateResolver,
+        ILearnedCategoryMappingRepository learnedCategoryMappingRepository)
     {
         _accountRepository = accountRepository;
         _categoryRepository = categoryRepository;
         _exchangeRateResolver = exchangeRateResolver;
+        _learnedCategoryMappingRepository = learnedCategoryMappingRepository;
     }
 
     public async Task<Guid> CreateAccountAsync(Guid userId, CreateAccountRequest request)
@@ -115,30 +119,56 @@ public class AccountService : IAccountService
             throw new ArgumentException("Account not found.", nameof(request.AccountId));
         }
 
+        var normalizedCurrency = NormalizeAssistantCurrency(request.Currency);
+        var transactionType = TransactionTypes.ToEnum(request.TransactionType);
+
+        await ValidateCategoryAsync(userId, request.CategoryId, transactionType, cancellationToken);
+
+        var transactionDate = NormalizeTransactionDate(request.TransactionDate);
+        var (dayStartUtc, dayEndUtcExclusive) = GetUtcDayRange(transactionDate);
+        var hasDuplicate = await _accountRepository.HasDuplicateTransactionAsync(
+            userId,
+            request.AccountId,
+            request.Amount,
+            transactionType,
+            request.CategoryId,
+            dayStartUtc,
+            dayEndUtcExclusive,
+            cancellationToken);
+
+        if (hasDuplicate && !request.IgnoreDuplicateWarning)
+        {
+            throw new DuplicateTransactionException("A similar transaction already exists for this account, amount, type, category, and date.");
+        }
+
+        var source = TransactionSources.ToEnum(request.Source);
         var resolvedRate = await _exchangeRateResolver.ResolveAsync("USD", "ARS", account.ExchangeRateType, cancellationToken);
-        var convertedAmountUSD = request.Currency == "USD"
+        var convertedAmountUSD = normalizedCurrency == "USD"
             ? request.Amount
             : request.Amount / resolvedRate.SellPrice;
-        var convertedAmountARS = request.Currency == "ARS"
+        var convertedAmountARS = normalizedCurrency == "ARS"
             ? request.Amount
             : request.Amount * resolvedRate.BuyPrice;
-
-        var transactionType = TransactionTypes.ToEnum(request.TransactionType);
 
         var transaction = Transaction.Create(
             request.AccountId,
             request.Amount,
-            request.Currency,
+            normalizedCurrency,
             transactionType,
             request.Description,
             convertedAmountUSD,
             convertedAmountARS,
             resolvedRate.Id,
-            request.CategoryId
+            request.CategoryId,
+            transactionDate: transactionDate,
+            source: source,
+            assistantRawInput: request.AssistantRawInput
         );
 
         await _accountRepository.AddTransactionAsync(transaction);
         await _accountRepository.SaveChangesAsync();
+
+        await LearnCategoryCorrectionAsync(userId, request, transactionType, cancellationToken);
 
         return transaction.Id;
     }
@@ -461,5 +491,89 @@ public class AccountService : IAccountService
             "ARS" => (amount / sellRate, amount),
             _ => throw new ArgumentException("Currency must be USD or ARS.", nameof(currency)),
         };
+    }
+
+    private async Task ValidateCategoryAsync(Guid userId, Guid? categoryId, TransactionType transactionType, CancellationToken cancellationToken)
+    {
+        if (categoryId == Guid.Empty)
+        {
+            throw new ArgumentException("Category id cannot be empty.", nameof(categoryId));
+        }
+
+        if (!categoryId.HasValue)
+        {
+            return;
+        }
+
+        var category = await _categoryRepository.GetByIdAsync(categoryId.Value, cancellationToken);
+        if (category is null)
+        {
+            throw new ArgumentException("Category not found.", nameof(categoryId));
+        }
+
+        if (!category.IsSystem && category.UserId != userId)
+        {
+            throw new ArgumentException("Category does not belong to the current user.", nameof(categoryId));
+        }
+
+        if (category.Type != transactionType)
+        {
+            throw new ArgumentException("Category type must match transaction type.", nameof(categoryId));
+        }
+    }
+
+    private async Task LearnCategoryCorrectionAsync(Guid userId, CreateTransactionRequest request, TransactionType transactionType, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.AssistantLearningKey) || !request.CategoryId.HasValue)
+        {
+            return;
+        }
+
+        if (request.AssistantSuggestedCategoryId == request.CategoryId)
+        {
+            return;
+        }
+
+        var normalizedKey = LearnedCategoryMapping.NormalizeKey(request.AssistantLearningKey);
+        var mapping = await _learnedCategoryMappingRepository.GetAsync(userId, normalizedKey, transactionType, cancellationToken);
+        if (mapping is null)
+        {
+            await _learnedCategoryMappingRepository.AddAsync(
+                LearnedCategoryMapping.Create(userId, normalizedKey, transactionType, request.CategoryId.Value),
+                cancellationToken);
+        }
+        else
+        {
+            mapping.UpdateCategory(request.CategoryId.Value);
+        }
+
+        await _learnedCategoryMappingRepository.SaveChangesAsync(cancellationToken);
+    }
+
+    private static string NormalizeAssistantCurrency(string currency)
+    {
+        if (string.IsNullOrWhiteSpace(currency))
+        {
+            return "ARS";
+        }
+
+        var normalizedCurrency = currency.Trim().ToUpperInvariant();
+        return normalizedCurrency switch
+        {
+            "ARS" or "USD" => normalizedCurrency,
+            _ => throw new ArgumentException("Currency must be ARS or USD.", nameof(currency))
+        };
+    }
+
+    private static DateTime NormalizeTransactionDate(DateTime? transactionDate)
+    {
+        var date = transactionDate?.Date ?? DateTime.UtcNow.Date;
+        return DateTime.SpecifyKind(date.AddHours(12), DateTimeKind.Utc);
+    }
+
+    private static (DateTime fromUtc, DateTime toUtcExclusive) GetUtcDayRange(DateTime transactionDate)
+    {
+        var date = transactionDate.Date;
+        return (DateTime.SpecifyKind(date, DateTimeKind.Utc), DateTime.SpecifyKind(date.AddDays(1), DateTimeKind.Utc));
     }
 }

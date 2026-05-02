@@ -1,6 +1,8 @@
 global using ArgenCash.Application.DTOs.Accounts.Requests;
 global using ArgenCash.Application.DTOs.Accounts.Responses;
 global using ArgenCash.Application.DTOs.Accounts.Snapshots;
+global using ArgenCash.Application.DTOs.Assistant.Requests;
+global using ArgenCash.Application.DTOs.Assistant.Responses;
 global using ArgenCash.Application.DTOs.Auth.Requests;
 global using ArgenCash.Application.DTOs.Auth.Responses;
 global using ArgenCash.Application.DTOs.Budgets.Requests;

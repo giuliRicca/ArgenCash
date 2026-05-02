@@ -3,6 +3,7 @@ using System;
 using ArgenCash.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ArgenCash.Infrastructure.Migrations
 {
     [DbContext(typeof(ArgenCashDbContext))]
-    partial class ArgenCashDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260501022305_AddAssistantPreferencesAndRawInput")]
+    partial class AddAssistantPreferencesAndRawInput
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

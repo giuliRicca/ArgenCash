@@ -26,6 +26,17 @@ namespace ArgenCash.Infrastructure.Configurations
                     v => TransactionTypes.ToEnum(v)))
                 .HasMaxLength(20);
 
+            builder.Property(t => t.Source)
+                .IsRequired()
+                .HasConversion(new ValueConverter<TransactionSource, string>(
+                    v => TransactionSources.ToString(v),
+                    v => TransactionSources.ToEnum(v)))
+                .HasMaxLength(30)
+                .HasDefaultValue(TransactionSource.Manual);
+
+            builder.Property(t => t.AssistantRawInput)
+                .HasMaxLength(1000);
+
             builder.Property(t => t.ConvertedAmountUSD)
                 .IsRequired()
                 .HasPrecision(19, 4);
@@ -67,6 +78,7 @@ namespace ArgenCash.Infrastructure.Configurations
                 table.HasCheckConstraint("CK_Transactions_ConvertedAmountARS_Positive", "\"ConvertedAmountARS\" > 0");
                 table.HasCheckConstraint("CK_Transactions_Currency_Length", "char_length(\"Currency\") = 3");
                 table.HasCheckConstraint("CK_Transactions_Type_Allowed", "\"TransactionType\" IN ('INCOME', 'EXPENSE')");
+                table.HasCheckConstraint("CK_Transactions_Source_Allowed", "\"Source\" IN ('MANUAL', 'ASSISTANT_TEXT', 'ASSISTANT_VOICE')");
             });
         }
     }

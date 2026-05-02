@@ -15,6 +15,8 @@ public class ArgenCashDbContext : DbContext
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Budget> Budgets => Set<Budget>();
     public DbSet<CreditCardStatementSettlement> CreditCardStatementSettlements => Set<CreditCardStatementSettlement>();
+    public DbSet<LearnedCategoryMapping> LearnedCategoryMappings => Set<LearnedCategoryMapping>();
+    public DbSet<AssistantPreferences> AssistantPreferences => Set<AssistantPreferences>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
