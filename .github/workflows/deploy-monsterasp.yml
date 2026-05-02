@@ -137,6 +137,9 @@ jobs:
               BaseUrl = $exchangeBaseUrl
               SourceName = $exchangeSource
             }
+            Assistant = [ordered]@{
+              Enabled = $true
+            }
             AllowedOrigins = @($allowedOrigin)
           }
 
